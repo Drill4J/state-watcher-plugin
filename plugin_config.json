@@ -1,0 +1,10 @@
+{
+  "id": "tracer",
+  "name": "Tracer",
+  "version": "{version}",
+  "description": "",
+  "type": "Custom",
+  "family": "INSTRUMENTATION",
+  "enabled": true,
+  "config": "{\"message\": \"hello from default plugin config... This is 'plugin_config.json file\"}"
+}

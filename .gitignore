@@ -1,0 +1,10 @@
+.gradle/
+**/.idea/*
+!/.idea/codeStyles
+!/.idea/fileTemplates
+build/
+distr/
+test-storage/
+work/
+.kotlintest/
+/build-cache/

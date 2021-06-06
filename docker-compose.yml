@@ -1,0 +1,14 @@
+version: '3'
+
+services:
+  project:
+    build: '.'
+    user: gradle
+    working_dir: /home/gradle/project
+    entrypoint: bash
+    volumes:
+    - gradle:/home/gradle/.gradle
+
+volumes:
+  gradle:
+    external: true
