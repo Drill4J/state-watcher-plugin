@@ -9,6 +9,7 @@ kotlin {
         dependencies {
             //provided by drill runtime or clients
             compileOnly("org.jetbrains.kotlinx:kotlinx-serialization-core")
+            compileOnly("org.jetbrains.kotlinx:kotlinx-serialization-json")
         }
     }
 

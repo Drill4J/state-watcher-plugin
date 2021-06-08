@@ -13,17 +13,33 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.epam.drill.plugins.tracer.api
+package com.epam.drill.plugins.tracer.storage
 
+import com.epam.drill.plugins.tracer.*
+import com.epam.kodux.*
 import kotlinx.serialization.*
 
 @Serializable
-sealed class Action
+internal class StoredRecord(
+    @Id val id: String,
+    @StreamSerialization(SerializationType.KRYO, CompressType.ZSTD, [])
+    val data: FinishedRecord,
+)
 
-@SerialName("START_RECORD")
-@Serializable
-data class StartRecord(val payload: StartRecordPayload) : Action()
+internal suspend fun StoreClient.loadRecord(
+    scopeId: String,
+): FinishedRecord? = findById<StoredRecord>(scopeId)?.data
 
-@SerialName("STOP_RECORD")
-@Serializable
-data class StopRecord(val payload: StopRecordPayload) : Action()
+
+internal suspend fun StoreClient.storeSession(
+    id: String,
+    record: FinishedRecord,
+) {
+    store(
+        StoredRecord(
+            id = id,
+            data = record
+        )
+    )
+
+}

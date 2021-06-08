@@ -13,17 +13,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.epam.drill.plugins.tracer.api
+package com.epam.drill.plugins.tracer
 
-import kotlinx.serialization.*
+import com.epam.drill.plugin.api.end.*
+import com.epam.drill.plugins.tracer.common.api.*
 
-@Serializable
-sealed class Action
+internal object StatusCodes {
+    const val OK = 200
+    const val BAD_REQUEST = 400
+    const val NOT_FOUND = 404
+    const val CONFLICT = 409
+}
 
-@SerialName("START_RECORD")
-@Serializable
-data class StartRecord(val payload: StartRecordPayload) : Action()
+internal fun AgentAction.toActionResult() = ActionResult(
+    code = StatusCodes.OK,
+    agentAction = this,
+    data = this
+)
 
-@SerialName("STOP_RECORD")
-@Serializable
-data class StopRecord(val payload: StopRecordPayload) : Action()

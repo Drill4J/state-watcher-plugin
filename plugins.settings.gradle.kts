@@ -8,6 +8,7 @@ pluginManagement {
         kotlin("plugin.serialization") version kotlinVersion
         id("kotlinx-atomicfu") version atomicFuVersion
         id("com.github.johnrengelman.shadow") version "5.2.0"
+        id("org.jetbrains.kotlin.plugin.noarg") version kotlinNoarg
         id("com.github.hierynomus.license") version licenseVersion
     }
 

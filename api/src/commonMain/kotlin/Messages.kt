@@ -18,8 +18,12 @@ package com.epam.drill.plugins.tracer.api
 import kotlinx.serialization.*
 
 @Serializable
-sealed class TracerMessage
+sealed class TraceMessage
 
-@SerialName("HEAP")
+@SerialName("AGENT_STATE")
 @Serializable
-data class HeapState(val msg: String = "") : TracerMessage()
+data class TraceState(val payload: StatePayload) : TraceMessage()
+
+@SerialName("INITIALIZED")
+@Serializable
+data class Initialized(val msg: String = "", val maxHeap: Long = 0) : TraceMessage()

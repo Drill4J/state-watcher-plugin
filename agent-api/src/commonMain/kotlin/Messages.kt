@@ -20,6 +20,10 @@ import kotlinx.serialization.*
 @Serializable
 sealed class TracerMessage
 
-@SerialName("HEAP")
+@SerialName("AGENT_STATE")
 @Serializable
-data class HeapState(val msg: String = "") : TracerMessage()
+data class StateFromAgent(val payload: StatePayload) : TracerMessage()
+
+@SerialName("INITIALIZED")
+@Serializable
+data class InitializedAgent(val msg: String = "", val maxHeap: Long) : TracerMessage()

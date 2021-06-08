@@ -18,10 +18,11 @@ package com.epam.drill.plugins.tracer
 import com.epam.drill.logger.api.LoggerFactory
 import com.epam.drill.plugin.api.processing.*
 import com.epam.drill.plugins.tracer.common.api.*
-import kotlinx.atomicfu.atomic
-import kotlinx.coroutines.GlobalScope
+import com.epam.drill.plugins.tracer.util.AsyncJobDispatcher
+import kotlinx.atomicfu.*
+import kotlinx.collections.immutable.*
+import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.ticker
-import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import org.hyperic.sigar.Sigar
 
@@ -30,7 +31,7 @@ class Plugin(
     id: String,
     agentContext: AgentContext,
     sender: Sender,
-    logging: LoggerFactory
+    logging: LoggerFactory,
 ) : AgentPart<AgentAction>(id, agentContext, sender, logging), Instrumenter {
     private val logger = logging.logger("Plugin $id")
 
@@ -40,7 +41,7 @@ class Plugin(
 
     private val enabled: Boolean get() = _enabled.value
 
-   var sigar: Sigar
+    private val sigar: Sigar
 
     init {
         initNativeLibraries(logger)
@@ -48,7 +49,7 @@ class Plugin(
     }
 
     override fun on() {
-        sendMessage(HeapState(msg = "Initialized"))
+        sendMessage(InitializedAgent(msg = "Initialized", sigar.mem.total))
         logger.info { "Plugin $id initialized!" }
     }
 
@@ -59,7 +60,7 @@ class Plugin(
 
     override fun instrument(
         className: String,
-        initialBytes: ByteArray
+        initialBytes: ByteArray,
     ): ByteArray? = takeIf { enabled }?.run {
         null
     }
@@ -68,22 +69,45 @@ class Plugin(
 
     override fun initPlugin() {
         logger.info { "Plugin $id: initializing..." }
+    }
 
-        GlobalScope.launch {
-            for (event in ticker(5000)) {
-                sendMessage(HeapState(sigar.mem.toString()))
-            }
+    private val _activeRecord = atomic(persistentHashMapOf<String, Job>())
+
+    private fun memJob(recordId: String, refreshRate: Long = 5000) = AsyncJobDispatcher.launch {
+        for (event in ticker(refreshRate)) {
+            sendMessage(StateFromAgent(StatePayload(
+                recordId,
+                AgentMetric(System.currentTimeMillis(), Memory(sigar.mem.used))))
+            )
         }
-
-
     }
 
     override suspend fun doAction(action: AgentAction) {
         when (action) {
-            is AgentAction1 -> action.payload.apply {
-                logger.info { "got action: $this" }
+            is StartAgentRecord -> action.payload.run {
+                _activeRecord.updateAndGet { records ->
+                    records[recordId]?.let {
+                        logger.warn { "Session with such id=$recordId already exist" }
+                        records
+                    } ?: records.put(
+                        recordId,
+                        memJob(recordId, refreshRate)
+                    )
+                }
             }
-
+            is StopAgentRecord -> {
+                action.payload.run {
+                    _activeRecord.updateAndGet { records ->
+                        records[recordId]?.let {
+                            it.cancel()
+                            records.remove(recordId)
+                        } ?: let {
+                            logger.warn { "Session with such id=$recordId doesn't exist" }
+                            records
+                        }
+                    }
+                }
+            }
             else -> Unit
         }
     }

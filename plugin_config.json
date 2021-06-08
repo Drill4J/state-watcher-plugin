@@ -1,6 +1,6 @@
 {
-  "id": "tracer",
-  "name": "Tracer",
+  "id": "state-watcher",
+  "name": "State-Watcher",
   "version": "{version}",
   "description": "",
   "type": "Custom",

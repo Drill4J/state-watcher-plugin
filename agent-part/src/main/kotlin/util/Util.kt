@@ -13,17 +13,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.epam.drill.plugins.tracer.api
+package com.epam.drill.plugins.tracer.util
 
-import kotlinx.serialization.*
+import kotlinx.coroutines.*
+import java.util.concurrent.*
 
-@Serializable
-sealed class Action
 
-@SerialName("START_RECORD")
-@Serializable
-data class StartRecord(val payload: StartRecordPayload) : Action()
+internal val availableProcessors = Runtime.getRuntime().availableProcessors()
 
-@SerialName("STOP_RECORD")
-@Serializable
-data class StopRecord(val payload: StopRecordPayload) : Action()
+//TODO May be replay on dispatcher io or use half of available processors
+internal object AsyncJobDispatcher : CoroutineScope {
+    override val coroutineContext = Executors.newFixedThreadPool(availableProcessors).asCoroutineDispatcher()
+}

@@ -22,9 +22,10 @@ import io.ktor.locations.*
 class Routes {
     @Location("/metrics")
     class Metrics {
-
         @Location("/heap")
-        class HeapState(val metrics: Metrics)
-
+        class HeapState(val metrics: Metrics) {
+            @Location("/update")
+            class UpdateHeap(val heapState: HeapState)
+        }
     }
 }

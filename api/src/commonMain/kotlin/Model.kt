@@ -14,3 +14,36 @@
  * limitations under the License.
  */
 package com.epam.drill.plugins.tracer.api
+
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.*
+
+@Serializable
+data class StatePayload(
+    val recordId: String,
+    val memory: Metric,
+)
+
+@Serializable
+data class Metric(
+    val timeStamp: Long,
+    val memory: Memory,
+)
+
+@Serializable
+data class Memory(
+    val heap: Long,
+)
+
+@Serializable
+data class StartRecordPayload(val recordId: String = "", val refreshRate: Long = 5000L)
+
+@Serializable
+data class StopRecordPayload(val recordId: String)
+
+@Serializable
+data class HeapDto(val timeStamp: Long, val series: Map<String, Metric>)
+
+@Serializable
+data class AllStats(val maxHeap: Long = 0, val series: Map<String, List<Metric>>)
+

@@ -21,5 +21,9 @@ import kotlinx.serialization.*
 sealed class AgentAction
 
 @Serializable
-@SerialName("AGENT_ACTION1")
-data class AgentAction1(val payload: ActionPayload) : AgentAction()
+@SerialName("START_AGENT_RECORD")
+data class StartAgentRecord(val payload: StartRecordPayload) : AgentAction()
+
+@SerialName("STOP_AGENT_RECORD")
+@Serializable
+data class StopAgentRecord(val payload: StopRecordPayload) : AgentAction()

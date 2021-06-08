@@ -19,11 +19,41 @@ import kotlinx.serialization.*
 
 @Serializable
 data class TracerConfig(
-    val message: String = ""
+    val message: String = "",
 )
 
 @Serializable
 data class ActionPayload(
     val id: String,
-    val name: String
+    val name: String,
 )
+
+@Serializable
+data class StartRecordPayload(
+    val recordId: String,
+    val refreshRate: Long = 5000L,
+)
+
+@Serializable
+data class StopRecordPayload(
+    val recordId: String,
+)
+
+@Serializable
+data class StatePayload(
+    val recordId: String,
+    val agentMetric: AgentMetric,
+)
+
+@Serializable
+data class AgentMetric(
+    val timeStamp: Long,
+    val memory: Memory,
+)
+
+@Serializable
+data class Memory(
+    val heap: Long,
+)
+
+

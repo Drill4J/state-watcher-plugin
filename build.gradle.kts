@@ -3,6 +3,7 @@ plugins {
     distribution
     `maven-publish`
     kotlin("jvm") apply false
+    id("org.jetbrains.kotlin.plugin.noarg")
     id("com.github.hierynomus.license")
 }
 val scriptUrl: String by extra
@@ -16,6 +17,7 @@ val kxSerializationVersion: String by project
 val kxCollectionsVersion: String by project
 val koduxVersion: String by extra
 val xodusVersion: String by extra
+
 buildscript {
     dependencies {
         classpath(files("gradle/classes"))
@@ -35,7 +37,7 @@ allprojects {
 
 subprojects {
     apply<BasePlugin>()
-
+    apply(plugin = "org.jetbrains.kotlin.plugin.noarg")
     group = "${rootProject.group}.$drillPluginId"
 
     val constraints = listOf(
@@ -61,6 +63,9 @@ subprojects {
         dependencyConstraints += constraints
     }
 
+    noArg {
+        annotation("kotlinx.serialization.Serializable")
+    }
 
     tasks {
         withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
@@ -131,7 +136,7 @@ distributions {
 
 publishing {
     publications {
-        create<MavenPublication>("tracerZip") {
+        create<MavenPublication>("state-watcher-Zip") {
             artifact(tasks.distZip.get())
         }
     }
