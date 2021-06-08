@@ -20,30 +20,16 @@ import com.epam.drill.plugins.tracer.storage.*
 import com.epam.drill.plugins.tracer.util.*
 
 
-class RecordManager(
-    private val plugin: Plugin
-) {
+fun Plugin.initSendRecord(activeRecord: ActiveRecord) = activeRecord.initSendHandler { recordId, metrics ->
+    updateMetric(AgentsStats(recordId, activeRecord.maxHeap, metrics.toSeries()))
+}
 
-    private val _activeRecords = AtomicCache<String, ActiveRecord>()
-
-    fun startRecord(recordId: String) {
-        val activeRecord = ActiveRecord(recordId, plugin.maxHeap.value)
-        plugin.initSendRecord(activeRecord)
-        plugin.initPersistRecord(activeRecord)
-        _activeRecords[recordId] = activeRecord
-    }
-
-    suspend fun stopRecord(
-        recordId: String,
-    ) = _activeRecords.remove(recordId)!!.stopRecording().also { finishedRecord ->
-        plugin.storeClient.storeRecord(finishedRecord)
-    }
-
-    fun addMetric(
-        instanceId: String,
-        recordId: String,
-        metric: Metric,
-    ) = _activeRecords[recordId]?.addMetric(instanceId, metric)
-
-
+fun Plugin.initPersistRecord(activeRecord: ActiveRecord) = activeRecord.initPersistHandler { recordId, metrics ->
+    val storedActiveRecord = storeClient.updateRecord(ActiveRecordDto(recordId,
+        activeRecord.maxHeap,
+        metrics.asSequence().associate {
+            it.key to it.value.toList()
+        }))
+    val series = storedActiveRecord.data.metrics.toSeries()
+    sendMetrics(AgentsStats(recordId, activeRecord.maxHeap, series))
 }

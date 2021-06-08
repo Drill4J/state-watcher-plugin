@@ -58,16 +58,19 @@ class Plugin(
 
     private val agentId = agentInfo.id
 
-    val maxHeap = atomic(0L)
+    internal val maxHeap = atomic(0L)
 
     private val _expected = atomic(persistentHashSetOf<String>())
 
-    private val recordManager = RecordManager(this, storeClient)
+    private val recordManager = RecordManager(this)
 
 
     override suspend fun initialize() {
-        storeClient.getAll<StoredRecord>().firstOrNull()?.let {
-            sendMetrics(AllStats(it.data.maxHeap, it.data.metrics))
+        storeClient.getAll<FinishedRecord>().takeIf { it.isNotEmpty() }?.let {
+            val reduce = it.reduce { finishedRecord, finishedRecord1 ->
+                FinishedRecord("", finishedRecord.maxHeap, finishedRecord.metrics.merge(finishedRecord1.metrics))
+            }
+            sendMetrics(AgentsStats("", reduce.maxHeap, reduce.metrics.toSeries()))
         }
     }
 
@@ -90,7 +93,6 @@ class Plugin(
                 logger.info { "type $message do not supported yet" }
             }
         }
-
         return ""
     }
 
@@ -128,16 +130,16 @@ class Plugin(
     override fun close() {
     }
 
-    internal suspend fun sendMetrics(state: AllStats) = send(
+    internal suspend fun sendMetrics(state: AgentsStats) = send(
         buildVersion,
         Routes.Metrics().let { Routes.Metrics.HeapState(it) },
-        AllStats.serializer() stringify state.copy(maxHeap = maxHeap.value)
+        AgentsStats.serializer() stringify state
     )
 
-    internal suspend fun sendMetric(heapDto: HeapDto) = send(
+    internal suspend fun updateMetric(agentsStats: AgentsStats) = send(
         buildVersion,
         Routes.Metrics.HeapState(Routes.Metrics()).let { Routes.Metrics.HeapState.UpdateHeap(it) },
-        (HeapDto.serializer() stringify heapDto).also { println(it) }
+        AgentsStats.serializer() stringify agentsStats
     )
 
     internal suspend fun send(buildVersion: String, destination: Any, message: Any) {

@@ -16,29 +16,59 @@
 package com.epam.drill.plugins.tracer.storage
 
 import com.epam.drill.plugins.tracer.*
+import com.epam.drill.plugins.tracer.api.*
+import com.epam.drill.plugins.tracer.util.*
 import com.epam.kodux.*
 import kotlinx.serialization.*
 
 @Serializable
-internal class StoredRecord(
-    @Id val id: String,
+internal data class ActiveRecordEntity(
+    val maxHeap: Long,
+    val metrics: Map<String, List<Metric>>,
+)
+
+@Serializable
+internal class StoredFinishRecord(
+    @Id val recordId: String,
     @StreamSerialization(SerializationType.KRYO, CompressType.ZSTD, [])
     val data: FinishedRecord,
 )
 
-internal suspend fun StoreClient.loadRecord(
-    scopeId: String,
-): FinishedRecord? = findById<StoredRecord>(scopeId)?.data
+@Serializable
+internal data class StoredActiveRecord(
+    @Id val recordId: String,
+    @StreamSerialization(SerializationType.KRYO, CompressType.ZSTD, [])
+    val data: ActiveRecordEntity,
+)
+
+internal suspend fun StoreClient.loadFinishedRecord(
+    recordId: String,
+): FinishedRecord? = findById<StoredFinishRecord>(recordId)?.data
+
+internal suspend fun StoreClient.loadActiveRecord(
+    recordId: String,
+): ActiveRecordEntity? = findById<StoredActiveRecord>(recordId)?.data
+
+internal class ActiveRecordDto(val recordId: String, val maxHeap: Long, val metrics: Map<String, List<Metric>>)
+
+internal suspend fun StoreClient.updateRecord(
+    activeRecord: ActiveRecordDto,
+) = findById<StoredActiveRecord>(activeRecord.recordId)?.let { it ->
+    store(it.copy(data = it.data.copy(metrics = it.data.metrics.merge(activeRecord.metrics))))
+} ?: store(StoredActiveRecord(activeRecord.recordId,
+    ActiveRecordEntity(activeRecord.maxHeap, activeRecord.metrics)))
 
 
-internal suspend fun StoreClient.storeSession(
-    id: String,
+internal suspend fun StoreClient.storeRecord(
     record: FinishedRecord,
 ) {
+    val activeRecord = findById<StoredActiveRecord>(record.id).also {
+        deleteById<StoredActiveRecord>(record.id)
+    }
     store(
-        StoredRecord(
-            id = id,
-            data = record
+        StoredFinishRecord(
+            recordId = record.id,
+            data = record.copy(metrics = record.metrics + (activeRecord?.data?.metrics ?: emptyMap()))
         )
     )
 

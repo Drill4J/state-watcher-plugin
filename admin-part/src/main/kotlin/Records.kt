@@ -16,8 +16,11 @@
 package com.epam.drill.plugins.tracer
 
 import com.epam.drill.plugins.tracer.api.*
+import com.epam.drill.plugins.tracer.util.*
+import com.epam.drill.plugins.tracer.util.AsyncJobDispatcher
 import kotlinx.atomicfu.*
 import kotlinx.collections.immutable.*
+import kotlinx.coroutines.*
 import kotlinx.serialization.*
 
 
@@ -27,25 +30,65 @@ sealed class Record {
     //TODO i think we can specify type of record here fore example memory or cpy profile
 }
 
+typealias ActiveRecordHandler = suspend ActiveRecord.(String, Map<String, List<Metric>>) -> Unit
 
 class ActiveRecord(
     override val id: String,
+    val maxHeap: Long,
 ) : Record() {
 
     private val _metrics = atomic(persistentHashMapOf<String, PersistentList<Metric>>())
 
-    // override fun iterator(): Iterator<Metric> = _metrics.value.values.flatten().iterator()
+    private val _metricsToPersist = atomic(persistentHashMapOf<String, PersistentList<Metric>>())
 
+    private val _sendHandler = atomic<ActiveRecordHandler?>(null)
 
+    private val _persistHandler = atomic<ActiveRecordHandler?>(null)
+
+    private val sendJob = AsyncJobDispatcher.launch {
+        while (true) {
+            delay(5000)
+            val metrics = _metrics.getAndUpdate { it.clear() }
+            _sendHandler.value?.let { handler ->
+                handler(id, metrics)
+            }
+            _metricsToPersist.update { map ->
+                map.merge(metrics).asSequence().associate {
+                    it.key to it.value.toPersistentList()
+                }.toPersistentHashMap()
+            }
+        }
+    }
+    private val persistJob = AsyncJobDispatcher.launch {
+        while (true) {
+            delay(10000)
+            _persistHandler.value?.let { handler ->
+                handler(id, _metricsToPersist.getAndUpdate { it.clear() })
+            }
+        }
+    }
 
     fun addMetric(instanceId: String, metric: Metric) = _metrics.updateAndGet {
         val map = it[instanceId] ?: persistentListOf()
         it.put(instanceId, map.add(metric))
     }
 
-    fun stopRecording(maxHeap: Long) = FinishedRecord(id, maxHeap, _metrics.value.asSequence().associate {
+    fun stopRecording() = FinishedRecord(id, maxHeap, _metrics.value.asSequence().associate {
         it.key to it.value.toList()
-    }.toMap())
+    }.toMap()).also { cancelJobs() }
+
+    private fun cancelJobs() {
+        sendJob.cancel()
+        persistJob.cancel()
+    }
+
+    fun initSendHandler(handler: ActiveRecordHandler) = _sendHandler.update {
+        it ?: handler
+    }
+
+    fun initPersistHandler(handler: ActiveRecordHandler) = _persistHandler.update {
+        it ?: handler
+    }
 
 }
 
@@ -55,8 +98,6 @@ data class FinishedRecord(
     val maxHeap: Long,
     val metrics: Map<String, List<Metric>>,
 ) : Record() {
-
-    //  override fun iterator(): Iterator<Metric> = metrics.iterator()
 
     override fun equals(other: Any?): Boolean = other is FinishedRecord && id == other.id
 

@@ -15,8 +15,7 @@
  */
 package com.epam.drill.plugins.tracer.api
 
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.*
+import kotlinx.serialization.*
 
 @Serializable
 data class StatePayload(
@@ -42,8 +41,8 @@ data class StartRecordPayload(val recordId: String = "", val refreshRate: Long =
 data class StopRecordPayload(val recordId: String)
 
 @Serializable
-data class HeapDto(val timeStamp: Long, val series: Map<String, Metric>)
+data class AgentsStats(val recordId: String, val maxHeap: Long = 0, val series: List<Series>)
 
 @Serializable
-data class AllStats(val maxHeap: Long = 0, val series: Map<String, List<Metric>>)
+data class Series(val instanceId: String, val data: List<Metric>)
 

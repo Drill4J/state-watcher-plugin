@@ -16,10 +16,12 @@
 package com.epam.drill.plugins.tracer.util
 
 import com.epam.drill.plugins.tracer.Plugin.Companion.json
+import com.epam.drill.plugins.tracer.api.*
 import kotlinx.coroutines.*
 import kotlinx.serialization.*
 import java.util.*
 import java.util.concurrent.*
+import kotlin.collections.HashMap
 
 
 infix fun <T> KSerializer<T>.parse(rawData: String): T = json.decodeFromString(this, rawData)
@@ -34,3 +36,14 @@ internal val availableProcessors = Runtime.getRuntime().availableProcessors()
 internal object AsyncJobDispatcher : CoroutineScope {
     override val coroutineContext = Executors.newFixedThreadPool(availableProcessors).asCoroutineDispatcher()
 }
+
+fun Map<String, List<Metric>>.merge(
+    map: Map<String, List<Metric>>,
+): Map<String, List<Metric>> = HashMap<String, List<Metric>>(this).apply {
+    map.asSequence().forEach {
+        merge(it.key, it.value) { list, list1 -> list + list1 }
+    }
+}
+
+fun Map<String, List<Metric>>.toSeries() = map { Series(it.key, it.value) }
+
