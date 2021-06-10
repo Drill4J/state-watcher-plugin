@@ -37,7 +37,7 @@ internal object AsyncJobDispatcher : CoroutineScope {
     override val coroutineContext = Executors.newFixedThreadPool(availableProcessors).asCoroutineDispatcher()
 }
 
-fun Map<String, List<Metric>>.merge(
+operator fun Map<String, List<Metric>>.plus(
     map: Map<String, List<Metric>>,
 ): Map<String, List<Metric>> = HashMap<String, List<Metric>>(this).apply {
     map.asSequence().forEach {

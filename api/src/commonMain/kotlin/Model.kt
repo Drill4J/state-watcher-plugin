@@ -35,13 +35,15 @@ data class Memory(
 )
 
 @Serializable
-data class StartRecordPayload(val recordId: String = "", val refreshRate: Long = 5000L)
+data class StartRecordPayload(val refreshRate: Long = 5000L)
+
 
 @Serializable
-data class StopRecordPayload(val recordId: String)
-
-@Serializable
-data class AgentsStats(val recordId: String, val maxHeap: Long = 0, val series: List<Series>)
+data class AgentsStats(
+    val maxHeap: Long = 0,
+    val brakes: List<Long> = emptyList(),
+    val series: List<Series> = emptyList(),
+)
 
 @Serializable
 data class Series(val instanceId: String, val data: List<Metric>)

@@ -26,4 +26,9 @@ data class StartRecord(val payload: StartRecordPayload) : Action()
 
 @SerialName("STOP_RECORD")
 @Serializable
-data class StopRecord(val payload: StopRecordPayload) : Action()
+object StopRecord : Action()
+
+
+@SerialName("RECORD_DATA")
+@Serializable
+object RecordData: Action()

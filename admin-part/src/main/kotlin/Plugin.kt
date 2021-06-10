@@ -21,16 +21,13 @@ import com.epam.drill.plugin.api.*
 import com.epam.drill.plugin.api.end.*
 import com.epam.drill.plugins.tracer.api.*
 import com.epam.drill.plugins.tracer.api.Memory
-import com.epam.drill.plugins.tracer.api.Metric
 import com.epam.drill.plugins.tracer.api.routes.*
 import com.epam.drill.plugins.tracer.common.api.*
 import com.epam.drill.plugins.tracer.common.api.StartRecordPayload
-import com.epam.drill.plugins.tracer.common.api.StopRecordPayload
 import com.epam.drill.plugins.tracer.storage.*
 import com.epam.drill.plugins.tracer.util.*
 import com.epam.kodux.*
 import kotlinx.atomicfu.*
-import kotlinx.collections.immutable.*
 import kotlinx.serialization.json.*
 import mu.*
 import java.io.*
@@ -58,22 +55,22 @@ class Plugin(
 
     private val agentId = agentInfo.id
 
-    internal val maxHeap = atomic(0L)
+    private val maxHeap = atomic(0L)
 
-    private val _expected = atomic(persistentHashSetOf<String>())
+    private val _activeRecord = atomic<ActiveRecord?>(null)
 
-    private val recordManager = RecordManager(this)
+    internal val agentStats = atomic(AgentsStats())
 
 
     override suspend fun initialize() {
-        storeClient.getAll<FinishedRecord>().takeIf { it.isNotEmpty() }?.let {
-            val reduce = it.reduce { finishedRecord, finishedRecord1 ->
-                FinishedRecord("", finishedRecord.maxHeap, finishedRecord.metrics.merge(finishedRecord1.metrics))
+        storeClient.loadRecordData()?.let { record ->
+            maxHeap.update {
+                record.data.maxHeap
             }
-            sendMetrics(AgentsStats("", reduce.maxHeap, reduce.metrics.toSeries()))
+            val data = record.data
+            agentStats.update { AgentsStats(data.maxHeap, data.breaks, data.metrics.toSeries()) }
         }
     }
-
 
     override suspend fun applyPackagesChanges() {
     }
@@ -87,7 +84,7 @@ class Plugin(
             }
             is StateFromAgent -> message.payload.run {
                 val metric = Metric(agentMetric.timeStamp, Memory(agentMetric.memory.heap))
-                recordManager.addMetric(instanceId, recordId, metric)
+                _activeRecord.value?.addMetric(instanceId, metric)
             }
             else -> {
                 logger.info { "type $message do not supported yet" }
@@ -96,24 +93,31 @@ class Plugin(
         return ""
     }
 
-
     //Actions from admin
     override suspend fun doAction(
         action: Action,
     ): ActionResult = when (action) {
         is StartRecord -> action.payload.run {
-            val recordId = recordId.takeIf { it.isNotBlank() } ?: genUuid()
-            recordManager.startRecord(recordId)
-            logger.info { "Record has started $recordId" }
+            _activeRecord.update {
+                ActiveRecord(maxHeap.value).also {
+                    initSendRecord(it)
+                    initPersistRecord(it)
+                }
+            }
+            logger.info { "Record has started " }
             StartAgentRecord(StartRecordPayload(
-                recordId,
                 refreshRate
             )).toActionResult()
         }
-        is StopRecord -> action.payload.run {
-            logger.info { "Record has stopped $action" }
-            recordManager.stopRecord(recordId)
-            StopAgentRecord(StopRecordPayload(recordId)).toActionResult()
+        is StopRecord -> {
+            logger.info { "Record has stopped " }
+            _activeRecord.getAndUpdate { null }?.stopRecording()?.also { dao ->
+                storeClient.updateRecordData(dao)
+            }
+            StopAgentRecord.toActionResult()
+        }
+        is RecordData -> {
+            ActionResult(StatusCodes.OK, agentStats.value)
         }
         else -> {
             logger.info { "Action '$action' is not supported!" }
@@ -129,12 +133,6 @@ class Plugin(
 
     override fun close() {
     }
-
-    internal suspend fun sendMetrics(state: AgentsStats) = send(
-        buildVersion,
-        Routes.Metrics().let { Routes.Metrics.HeapState(it) },
-        state
-    )
 
     internal suspend fun updateMetric(agentsStats: AgentsStats) = send(
         buildVersion,

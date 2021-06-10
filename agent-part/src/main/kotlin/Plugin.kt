@@ -71,12 +71,11 @@ class Plugin(
         logger.info { "Plugin $id: initializing..." }
     }
 
-    private val _activeRecord = atomic(persistentHashMapOf<String, Job>())
+    private val _activeRecord = atomic<Job?>(null)
 
-    private fun memJob(recordId: String, refreshRate: Long = 5000) = AsyncJobDispatcher.launch {
+    private fun memJob(refreshRate: Long = 5000) = AsyncJobDispatcher.launch {
         for (event in ticker(refreshRate)) {
             sendMessage(StateFromAgent(StatePayload(
-                recordId,
                 AgentMetric(System.currentTimeMillis(), Memory(sigar.mem.used))))
             )
         }
@@ -86,26 +85,16 @@ class Plugin(
         when (action) {
             is StartAgentRecord -> action.payload.run {
                 _activeRecord.updateAndGet { records ->
-                    records[recordId]?.let {
-                        logger.warn { "Session with such id=$recordId already exist" }
+                    records?.let {
+                        logger.warn { "Record already started" }
                         records
-                    } ?: records.put(
-                        recordId,
-                        memJob(recordId, refreshRate)
-                    )
+                    } ?: memJob(refreshRate)
                 }
             }
             is StopAgentRecord -> {
-                action.payload.run {
-                    _activeRecord.updateAndGet { records ->
-                        records[recordId]?.let {
-                            it.cancel()
-                            records.remove(recordId)
-                        } ?: let {
-                            logger.warn { "Session with such id=$recordId doesn't exist" }
-                            records
-                        }
-                    }
+                _activeRecord.updateAndGet { records ->
+                    records?.cancel()
+                    null
                 }
             }
             else -> Unit

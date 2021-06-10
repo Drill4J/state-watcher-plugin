@@ -18,18 +18,20 @@ package com.epam.drill.plugins.tracer
 import com.epam.drill.plugins.tracer.api.*
 import com.epam.drill.plugins.tracer.storage.*
 import com.epam.drill.plugins.tracer.util.*
+import kotlinx.atomicfu.*
 
 
-fun Plugin.initSendRecord(activeRecord: ActiveRecord) = activeRecord.initSendHandler { recordId, metrics ->
-    updateMetric(AgentsStats(recordId, activeRecord.maxHeap, metrics.toSeries()))
+fun Plugin.initSendRecord(activeRecord: ActiveRecord) = activeRecord.initSendHandler { metrics ->
+    updateMetric(AgentsStats(maxHeap = activeRecord.maxHeap, series = metrics.toSeries()))
 }
 
-fun Plugin.initPersistRecord(activeRecord: ActiveRecord) = activeRecord.initPersistHandler { recordId, metrics ->
-    val storedActiveRecord = storeClient.updateRecord(ActiveRecordDto(recordId,
-        activeRecord.maxHeap,
-        metrics.asSequence().associate {
+fun Plugin.initPersistRecord(activeRecord: ActiveRecord) = activeRecord.initPersistHandler { metrics ->
+    val storedActiveRecord = storeClient.updateRecordData(RecordDao(
+        maxHeap = activeRecord.maxHeap,
+        metrics = metrics.asSequence().associate {
             it.key to it.value.toList()
         }))
     val series = storedActiveRecord.data.metrics.toSeries()
-    sendMetrics(AgentsStats(recordId, activeRecord.maxHeap, series))
+    //sendMetrics(AgentsStats(activeRecord.maxHeap, storedActiveRecord.data.breaks, series))
+    agentStats.update { AgentsStats(activeRecord.maxHeap, storedActiveRecord.data.breaks, series) }
 }

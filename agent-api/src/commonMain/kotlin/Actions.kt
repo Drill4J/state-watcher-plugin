@@ -26,4 +26,4 @@ data class StartAgentRecord(val payload: StartRecordPayload) : AgentAction()
 
 @SerialName("STOP_AGENT_RECORD")
 @Serializable
-data class StopAgentRecord(val payload: StopRecordPayload) : AgentAction()
+object StopAgentRecord : AgentAction()

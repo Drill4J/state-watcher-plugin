@@ -18,30 +18,12 @@ package com.epam.drill.plugins.tracer.common.api
 import kotlinx.serialization.*
 
 @Serializable
-data class TracerConfig(
-    val message: String = "",
-)
-
-@Serializable
-data class ActionPayload(
-    val id: String,
-    val name: String,
-)
-
-@Serializable
 data class StartRecordPayload(
-    val recordId: String,
     val refreshRate: Long = 5000L,
 )
 
 @Serializable
-data class StopRecordPayload(
-    val recordId: String,
-)
-
-@Serializable
 data class StatePayload(
-    val recordId: String,
     val agentMetric: AgentMetric,
 )
 

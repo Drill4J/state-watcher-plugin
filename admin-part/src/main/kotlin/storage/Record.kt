@@ -15,7 +15,6 @@
  */
 package com.epam.drill.plugins.tracer.storage
 
-import com.epam.drill.plugins.tracer.*
 import com.epam.drill.plugins.tracer.api.*
 import com.epam.drill.plugins.tracer.util.*
 import com.epam.kodux.*
@@ -24,52 +23,41 @@ import kotlinx.serialization.*
 @Serializable
 internal data class ActiveRecordEntity(
     val maxHeap: Long,
+    val breaks: List<Long>,
     val metrics: Map<String, List<Metric>>,
 )
 
-@Serializable
-internal class StoredFinishRecord(
-    @Id val recordId: String,
-    @StreamSerialization(SerializationType.KRYO, CompressType.ZSTD, [])
-    val data: FinishedRecord,
-)
+class RecordDao(val maxHeap: Long, val `break`: Long? = null, val metrics: Map<String, List<Metric>>)
+
+private const val storeId = "id"
 
 @Serializable
 internal data class StoredActiveRecord(
-    @Id val recordId: String,
+    @Id val id: String = storeId,
     @StreamSerialization(SerializationType.KRYO, CompressType.ZSTD, [])
     val data: ActiveRecordEntity,
 )
 
-internal suspend fun StoreClient.loadFinishedRecord(
-    recordId: String,
-): FinishedRecord? = findById<StoredFinishRecord>(recordId)?.data
 
-internal suspend fun StoreClient.loadActiveRecord(
-    recordId: String,
-): ActiveRecordEntity? = findById<StoredActiveRecord>(recordId)?.data
-
-internal class ActiveRecordDto(val recordId: String, val maxHeap: Long, val metrics: Map<String, List<Metric>>)
-
-internal suspend fun StoreClient.updateRecord(
-    activeRecord: ActiveRecordDto,
-) = findById<StoredActiveRecord>(activeRecord.recordId)?.let { it ->
-    store(it.copy(data = it.data.copy(metrics = it.data.metrics.merge(activeRecord.metrics))))
-} ?: store(StoredActiveRecord(activeRecord.recordId,
-    ActiveRecordEntity(activeRecord.maxHeap, activeRecord.metrics)))
-
-
-internal suspend fun StoreClient.storeRecord(
-    record: FinishedRecord,
-) {
-    val activeRecord = findById<StoredActiveRecord>(record.id).also {
-        deleteById<StoredActiveRecord>(record.id)
-    }
-    store(
-        StoredFinishRecord(
-            recordId = record.id,
-            data = record.copy(metrics = record.metrics + (activeRecord?.data?.metrics ?: emptyMap()))
+internal suspend fun StoreClient.updateRecordData(
+    record: RecordDao,
+) = findById<StoredActiveRecord>(storeId)?.let { activeRecord ->
+    val data = activeRecord.data
+    val metrics = data.metrics.asSequence().associate { entry ->
+        val list = entry.value
+        entry.key to (list.takeIf { it.size < 100 } ?: list.subList(list.size / 4, list.size))
+    } + record.metrics
+    store(activeRecord.copy(data = data.copy(metrics = metrics,
+        breaks = record.`break`?.let { data.breaks + it } ?: data.breaks)))
+} ?: store(
+    StoredActiveRecord(
+        data = ActiveRecordEntity(
+            record.maxHeap,
+            record.`break`?.let { listOf(it) } ?: emptyList(),
+            record.metrics
         )
     )
+)
 
-}
+internal suspend fun StoreClient.loadRecordData() = findById<StoredActiveRecord>(storeId)
+

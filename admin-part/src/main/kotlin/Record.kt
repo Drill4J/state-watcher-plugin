@@ -16,27 +16,19 @@
 package com.epam.drill.plugins.tracer
 
 import com.epam.drill.plugins.tracer.api.*
+import com.epam.drill.plugins.tracer.storage.RecordDao
 import com.epam.drill.plugins.tracer.util.*
 import com.epam.drill.plugins.tracer.util.AsyncJobDispatcher
 import kotlinx.atomicfu.*
 import kotlinx.collections.immutable.*
 import kotlinx.coroutines.*
-import kotlinx.serialization.*
 
 
-@Serializable
-sealed class Record {
-    abstract val id: String
-    //TODO i think we can specify type of record here fore example memory or cpy profile
-}
-
-typealias ActiveRecordHandler = suspend ActiveRecord.(String, Map<String, List<Metric>>) -> Unit
+typealias ActiveRecordHandler = suspend ActiveRecord.(Map<String, List<Metric>>) -> Unit
 
 class ActiveRecord(
-    override val id: String,
     val maxHeap: Long,
-) : Record() {
-
+) {
     private val _metrics = atomic(persistentHashMapOf<String, PersistentList<Metric>>())
 
     private val _metricsToPersist = atomic(persistentHashMapOf<String, PersistentList<Metric>>())
@@ -50,20 +42,21 @@ class ActiveRecord(
             delay(5000)
             val metrics = _metrics.getAndUpdate { it.clear() }
             _sendHandler.value?.let { handler ->
-                handler(id, metrics)
+                handler(metrics)
             }
             _metricsToPersist.update { map ->
-                map.merge(metrics).asSequence().associate {
+                (map + metrics).asSequence().associate {
                     it.key to it.value.toPersistentList()
                 }.toPersistentHashMap()
             }
         }
     }
+
     private val persistJob = AsyncJobDispatcher.launch {
         while (true) {
             delay(10000)
             _persistHandler.value?.let { handler ->
-                handler(id, _metricsToPersist.getAndUpdate { it.clear() })
+                handler(_metricsToPersist.getAndUpdate { it.clear() })
             }
         }
     }
@@ -73,7 +66,7 @@ class ActiveRecord(
         it.put(instanceId, map.add(metric))
     }
 
-    fun stopRecording() = FinishedRecord(id, maxHeap, _metrics.value.asSequence().associate {
+    fun stopRecording() = RecordDao(maxHeap, currentTimeMillis(), _metrics.value.asSequence().associate {
         it.key to it.value.toList()
     }.toMap()).also { cancelJobs() }
 
@@ -90,16 +83,4 @@ class ActiveRecord(
         it ?: handler
     }
 
-}
-
-@Serializable
-data class FinishedRecord(
-    override val id: String,
-    val maxHeap: Long,
-    val metrics: Map<String, List<Metric>>,
-) : Record() {
-
-    override fun equals(other: Any?): Boolean = other is FinishedRecord && id == other.id
-
-    override fun hashCode(): Int = id.hashCode()
 }
