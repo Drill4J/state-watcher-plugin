@@ -106,21 +106,16 @@ class Plugin(
                 }
                 logger.info { "Record has started " }
                 StartAgentRecord(StartRecordPayload(
-                    refreshRate
+                    refreshRate = refreshRate
                 )).toActionResult()
             } else ActionResult(StatusCodes.BAD_REQUEST, "Recode already started")
         }
         is StopRecord -> {
             logger.info { "Record has stopped " }
-            _activeRecord.getAndUpdate { null }?.stopRecording()?.also { dao ->
-                //TODO brake should be in response ?
-                val recordEntity = storeClient.updateRecordData(dao)
-                updateMetric(AgentsActiveStats(maxHeap = dao.maxHeap,
-                    brakes = recordEntity.breaks,
-                    isMonitoring = false,
-                    series = dao.metrics.toSeries()))
+            val recordData = _activeRecord.getAndUpdate { null }?.stopRecording()?.let { dao ->
+                storeClient.updateRecordData(dao)
             }
-            StopAgentRecord.toActionResult()
+            StopAgentRecord(StopRecordPayload(false, recordData?.breaks ?: emptyList())).toActionResult()
         }
         is RecordData -> {
             ActionResult(StatusCodes.OK, agentStats.value)

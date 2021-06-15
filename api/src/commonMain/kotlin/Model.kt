@@ -52,8 +52,6 @@ data class AgentsStats(
 data class AgentsActiveStats(
     val maxHeap: Long = 0,
     val start: Long = 0,
-    val isMonitoring: Boolean = true,
-    val brakes: List<Long> = emptyList(),
     val series: List<Series> = emptyList(),
 )
 

@@ -19,7 +19,14 @@ import kotlinx.serialization.*
 
 @Serializable
 data class StartRecordPayload(
+    val isMonitoring: Boolean = true,
     val refreshRate: Long = 5000L,
+)
+
+@Serializable
+data class StopRecordPayload(
+    val isMonitoring: Boolean = false,
+    val brakes: List<Long>,
 )
 
 @Serializable
