@@ -19,45 +19,61 @@ import com.epam.drill.plugins.tracer.api.*
 import com.epam.drill.plugins.tracer.util.*
 import com.epam.kodux.*
 import kotlinx.serialization.*
+import mu.*
 
-@Serializable
-internal data class ActiveRecordEntity(
-    val maxHeap: Long,
-    val breaks: List<Long>,
-    val metrics: Map<String, List<Metric>>,
-)
+val logger = KotlinLogging.logger("Storage")
 
 class RecordDao(val maxHeap: Long, val `break`: Long? = null, val metrics: Map<String, List<Metric>>)
+
+internal suspend fun StoreClient.loadRecordData() = findById<StoredRecordData>(storeId)
+
+@Serializable
+data class InstanceData(
+    @Id val instanceId: String,
+    val metrics: List<Metric>,
+) {
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+        return instanceId == (other as InstanceData).instanceId
+    }
+
+    override fun hashCode(): Int {
+        return instanceId.hashCode()
+    }
+}
 
 private const val storeId = "id"
 
 @Serializable
-internal data class StoredActiveRecord(
+internal data class StoredRecordData(
     @Id val id: String = storeId,
+    val maxHeap: Long,
+    val breaks: List<Long>,
     @StreamSerialization(SerializationType.KRYO, CompressType.ZSTD, [])
-    val data: ActiveRecordEntity,
+    val instances: Set<InstanceData>,
 )
-
 
 internal suspend fun StoreClient.updateRecordData(
     record: RecordDao,
-) = findById<StoredActiveRecord>(storeId)?.let { activeRecord ->
-    val data = activeRecord.data
-    val metrics = data.metrics.asSequence().associate { entry ->
-        val list = entry.value
-        entry.key to (list.takeIf { it.size < 100 } ?: list.subList(list.size / 4, list.size).toList())
-    } + record.metrics
-    store(activeRecord.copy(data = data.copy(metrics = metrics,
-        breaks = record.`break`?.let { data.breaks + it } ?: data.breaks)))
-} ?: store(
-    StoredActiveRecord(
-        data = ActiveRecordEntity(
-            record.maxHeap,
-            record.`break`?.let { listOf(it) } ?: emptyList(),
-            record.metrics
+): StoredRecordData {
+    val instances = mutableSetOf<InstanceData>()
+    for ((instanceId, metrics) in record.metrics) {
+        instances.add(findById<InstanceData>(instanceId)?.also {
+            store(it.copy(metrics = it.metrics + metrics))
+        } ?: store(InstanceData(instanceId, metrics)))
+    }
+    return findById<StoredRecordData>(storeId)?.let {
+        store(it.copy(
+            breaks = it.breaks + (record.`break`?.let { listOf(it) } ?: emptyList()),
+            instances = it.instances + instances
+        )).also { logger.info { "Updated recorde saved $it" } }
+    } ?: store(
+        StoredRecordData(
+            maxHeap = record.maxHeap,
+            breaks = record.`break`?.let { listOf(it) } ?: emptyList(),
+            instances = instances
         )
-    )
-)
-
-internal suspend fun StoreClient.loadRecordData() = findById<StoredActiveRecord>(storeId)
-
+    ).also { logger.info { "New Recode saved $it" } }
+}

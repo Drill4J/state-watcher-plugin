@@ -31,6 +31,6 @@ fun Plugin.initPersistRecord(activeRecord: ActiveRecord) = activeRecord.initPers
         metrics = metrics.asSequence().associate {
             it.key to it.value.toList()
         }))
-    val series = storedActiveRecord.data.metrics.toSeries()
-    agentStats.update { AgentsStats(activeRecord.maxHeap, storedActiveRecord.data.breaks, series) }
+    val series = storedActiveRecord.instances.toSeries()
+    agentStats.update { AgentsStats(activeRecord.maxHeap, storedActiveRecord.breaks, series) }
 }

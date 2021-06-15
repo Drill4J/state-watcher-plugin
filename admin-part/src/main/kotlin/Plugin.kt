@@ -65,10 +65,9 @@ class Plugin(
     override suspend fun initialize() {
         storeClient.loadRecordData()?.let { record ->
             maxHeap.update {
-                record.data.maxHeap
+                record.maxHeap
             }
-            val data = record.data
-            agentStats.update { AgentsStats(data.maxHeap, data.breaks, data.metrics.toSeries()) }
+            agentStats.update { AgentsStats(record.maxHeap, record.breaks, record.instances.toSeries()) }
         }
     }
 
@@ -98,21 +97,28 @@ class Plugin(
         action: Action,
     ): ActionResult = when (action) {
         is StartRecord -> action.payload.run {
-            _activeRecord.update {
-                ActiveRecord(currentTimeMillis(), maxHeap.value).also {
-                    initSendRecord(it)
-                    initPersistRecord(it)
+            if (_activeRecord.value == null) {
+                _activeRecord.update {
+                    ActiveRecord(currentTimeMillis(), maxHeap.value).also {
+                        initSendRecord(it)
+                        initPersistRecord(it)
+                    }
                 }
-            }
-            logger.info { "Record has started " }
-            StartAgentRecord(StartRecordPayload(
-                refreshRate
-            )).toActionResult()
+                logger.info { "Record has started " }
+                StartAgentRecord(StartRecordPayload(
+                    refreshRate
+                )).toActionResult()
+            } else ActionResult(StatusCodes.BAD_REQUEST, "Recode already started")
         }
         is StopRecord -> {
             logger.info { "Record has stopped " }
             _activeRecord.getAndUpdate { null }?.stopRecording()?.also { dao ->
-                storeClient.updateRecordData(dao)
+                //TODO brake should be in response ?
+                val recordEntity = storeClient.updateRecordData(dao)
+                updateMetric(AgentsActiveStats(maxHeap = dao.maxHeap,
+                    brakes = recordEntity.breaks,
+                    isMonitoring = false,
+                    series = dao.metrics.toSeries()))
             }
             StopAgentRecord.toActionResult()
         }
@@ -137,7 +143,7 @@ class Plugin(
     internal suspend fun updateMetric(agentsStats: AgentsActiveStats) = send(
         buildVersion,
         Routes.Metrics.HeapState(Routes.Metrics()).let { Routes.Metrics.HeapState.UpdateHeap(it) },
-        agentsStats
+        agentsStats.also { logger.info { "Send metric $it" } }
     )
 
     internal suspend fun send(buildVersion: String, destination: Any, message: Any) {

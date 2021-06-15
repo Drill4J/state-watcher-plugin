@@ -31,4 +31,4 @@ object StopRecord : Action()
 
 @SerialName("RECORD_DATA")
 @Serializable
-object RecordData: Action()
+object RecordData : Action()

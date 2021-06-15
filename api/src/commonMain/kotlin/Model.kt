@@ -37,6 +37,9 @@ data class Memory(
 @Serializable
 data class StartRecordPayload(val refreshRate: Long = 5000L)
 
+@Serializable
+data class RecordDataSettings(val from: Long, val to: Long)
+
 
 @Serializable
 data class AgentsStats(
@@ -44,10 +47,12 @@ data class AgentsStats(
     val brakes: List<Long> = emptyList(),
     val series: List<Series> = emptyList(),
 )
+
 @Serializable
 data class AgentsActiveStats(
     val maxHeap: Long = 0,
     val start: Long = 0,
+    val isMonitoring: Boolean = true,
     val brakes: List<Long> = emptyList(),
     val series: List<Series> = emptyList(),
 )

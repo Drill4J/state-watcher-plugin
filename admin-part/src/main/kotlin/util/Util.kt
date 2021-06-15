@@ -17,10 +17,14 @@ package com.epam.drill.plugins.tracer.util
 
 import com.epam.drill.plugins.tracer.Plugin.Companion.json
 import com.epam.drill.plugins.tracer.api.*
+import com.epam.drill.plugins.tracer.storage.*
+import com.epam.drill.plugins.tracer.storage.InstanceData
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.*
 import kotlinx.serialization.*
 import java.util.*
 import java.util.concurrent.*
+import kotlin.collections.ArrayList
 import kotlin.collections.HashMap
 
 
@@ -47,3 +51,12 @@ operator fun Map<String, List<Metric>>.plus(
 
 fun Map<String, List<Metric>>.toSeries() = map { Series(it.key, it.value) }
 
+fun Iterable<InstanceData>.toSeries() = map { Series(it.instanceId, it.metrics) }
+
+operator fun Set<InstanceData>.plus(
+    other: Set<InstanceData>,
+): Set<InstanceData> = ArrayList<InstanceData>(this).also { list ->
+    other.forEach { instanceData ->
+        list.firstOrNull { it == instanceData }?.metrics?.plus(instanceData.metrics) ?: list.add(instanceData)
+    }
+}.toSet()
