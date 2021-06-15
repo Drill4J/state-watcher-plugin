@@ -67,7 +67,7 @@ class Plugin(
             maxHeap.update {
                 record.maxHeap
             }
-            agentStats.update { AgentsStats(record.maxHeap, record.breaks, record.instances.toSeries()) }
+            agentStats.update { AgentsStats(record.maxHeap, false, record.breaks, record.instances.toSeries()) }
         }
     }
 
@@ -97,6 +97,7 @@ class Plugin(
         action: Action,
     ): ActionResult = when (action) {
         is StartRecord -> action.payload.run {
+            //TODO it should be remove when service group would be implemented
             if (_activeRecord.value == null) {
                 _activeRecord.update {
                     ActiveRecord(currentTimeMillis(), maxHeap.value).also {
@@ -104,6 +105,7 @@ class Plugin(
                         initPersistRecord(it)
                     }
                 }
+                agentStats.updateAndGet { it.copy(isMonitoring = true) }
                 logger.info { "Record has started " }
                 StartAgentRecord(StartRecordPayload(
                     refreshRate = refreshRate
@@ -115,6 +117,7 @@ class Plugin(
             val recordData = _activeRecord.getAndUpdate { null }?.stopRecording()?.let { dao ->
                 storeClient.updateRecordData(dao)
             }
+            agentStats.update { it.copy(isMonitoring = false) }
             StopAgentRecord(StopRecordPayload(false, recordData?.breaks ?: emptyList())).toActionResult()
         }
         is RecordData -> {

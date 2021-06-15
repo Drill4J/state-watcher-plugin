@@ -32,5 +32,5 @@ fun Plugin.initPersistRecord(activeRecord: ActiveRecord) = activeRecord.initPers
             it.key to it.value.toList()
         }))
     val series = storedActiveRecord.instances.toSeries()
-    agentStats.update { AgentsStats(activeRecord.maxHeap, storedActiveRecord.breaks, series) }
+    agentStats.update { AgentsStats(activeRecord.maxHeap, true, storedActiveRecord.breaks, series) }
 }

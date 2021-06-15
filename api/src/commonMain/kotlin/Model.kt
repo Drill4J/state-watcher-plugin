@@ -44,6 +44,7 @@ data class RecordDataSettings(val from: Long, val to: Long)
 @Serializable
 data class AgentsStats(
     val maxHeap: Long = 0,
+    val isMonitoring : Boolean = false,
     val brakes: List<Long> = emptyList(),
     val series: List<Series> = emptyList(),
 )
