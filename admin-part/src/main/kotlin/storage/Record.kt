@@ -25,7 +25,7 @@ val logger = KotlinLogging.logger("Storage")
 
 class RecordDao(val maxHeap: Long, val `break`: Long? = null, val metrics: Map<String, List<Metric>>)
 
-internal suspend fun StoreClient.loadRecordData() = findById<StoredRecordData>(storeId)
+internal suspend fun StoreClient.loadRecordData(agentId: String) = findById<StoredRecordData>(agentId)
 
 @Serializable
 data class InstanceData(
@@ -44,18 +44,17 @@ data class InstanceData(
     }
 }
 
-private const val storeId = "id"
-
 @Serializable
 internal data class StoredRecordData(
-    @Id val id: String = storeId,
+    @Id val id: String,
     val maxHeap: Long,
-    val breaks: List<Long>,
+    val breaks: List<Long> = emptyList(),
     @StreamSerialization(SerializationType.KRYO, CompressType.ZSTD, [])
-    val instances: Set<InstanceData>,
+    val instances: Set<InstanceData> = emptySet(),
 )
 
 internal suspend fun StoreClient.updateRecordData(
+    agentId: String,
     record: RecordDao,
 ): StoredRecordData {
     val instances = mutableSetOf<InstanceData>()
@@ -64,13 +63,14 @@ internal suspend fun StoreClient.updateRecordData(
             store(it.copy(metrics = it.metrics + metrics))
         } ?: store(InstanceData(instanceId, metrics)))
     }
-    return findById<StoredRecordData>(storeId)?.let {
+    return findById<StoredRecordData>(agentId)?.let {
         store(it.copy(
             breaks = it.breaks + (record.`break`?.let { listOf(it) } ?: emptyList()),
             instances = it.instances + instances
         )).also { logger.info { "Updated recorde saved $it" } }
     } ?: store(
         StoredRecordData(
+            id = agentId,
             maxHeap = record.maxHeap,
             breaks = record.`break`?.let { listOf(it) } ?: emptyList(),
             instances = instances

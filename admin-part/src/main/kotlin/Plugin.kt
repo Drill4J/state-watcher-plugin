@@ -53,9 +53,7 @@ class Plugin(
 
     private val buildVersion = agentInfo.buildVersion
 
-    private val agentId = agentInfo.id
-
-    private val maxHeap = atomic(0L)
+    internal val agentId = agentInfo.id
 
     private val _activeRecord = atomic<ActiveRecord?>(null)
 
@@ -63,10 +61,7 @@ class Plugin(
 
 
     override suspend fun initialize() {
-        storeClient.loadRecordData()?.let { record ->
-            maxHeap.update {
-                record.maxHeap
-            }
+        storeClient.loadRecordData(agentId)?.let { record ->
             agentStats.update { AgentsStats(record.maxHeap, false, record.breaks, record.instances.toSeries()) }
         }
     }
@@ -79,7 +74,12 @@ class Plugin(
         when (val message = TracerMessage.serializer() parse content) {
             is InitializedAgent -> {
                 logger.info { "Plugin $id for instance $instanceId is initialized, max heap size = ${message.maxHeap}" }
-                maxHeap.update { message.maxHeap }
+                storeClient.store(
+                    storeClient.loadRecordData(agentId)?.copy(
+                        maxHeap = message.maxHeap
+                    ) ?: StoredRecordData(agentId, maxHeap = message.maxHeap)
+                )
+                agentStats.update { it.copy(maxHeap = message.maxHeap) }
             }
             is StateFromAgent -> message.payload.run {
                 val metric = Metric(agentMetric.timeStamp, Memory(agentMetric.memory.heap))
@@ -100,7 +100,7 @@ class Plugin(
             //TODO it should be remove when service group would be implemented
             if (_activeRecord.value == null) {
                 _activeRecord.update {
-                    ActiveRecord(currentTimeMillis(), maxHeap.value).also {
+                    ActiveRecord(currentTimeMillis(), agentStats.value.maxHeap).also {
                         initSendRecord(it)
                         initPersistRecord(it)
                     }
@@ -115,7 +115,7 @@ class Plugin(
         is StopRecord -> {
             logger.info { "Record has stopped " }
             val recordData = _activeRecord.getAndUpdate { null }?.stopRecording()?.let { dao ->
-                storeClient.updateRecordData(dao)
+                storeClient.updateRecordData(agentId, dao)
             }
             agentStats.update { it.copy(isMonitoring = false) }
             StopAgentRecord(StopRecordPayload(false, recordData?.breaks ?: emptyList())).toActionResult()
