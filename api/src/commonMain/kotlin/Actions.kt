@@ -31,4 +31,4 @@ object StopRecord : Action()
 
 @SerialName("RECORD_DATA")
 @Serializable
-object RecordData : Action()
+data class RecordData(val payload: RecordDataSettings) : Action()

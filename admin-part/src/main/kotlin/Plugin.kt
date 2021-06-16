@@ -57,12 +57,12 @@ class Plugin(
 
     private val _activeRecord = atomic<ActiveRecord?>(null)
 
-    internal val agentStats = atomic(AgentsStats())
+    internal val maxHeap = atomic(0L)
 
 
     override suspend fun initialize() {
         storeClient.loadRecordData(agentId)?.let { record ->
-            agentStats.update { AgentsStats(record.maxHeap, false, record.breaks, record.instances.toSeries()) }
+            maxHeap.update { record.maxHeap }
         }
     }
 
@@ -79,7 +79,7 @@ class Plugin(
                         maxHeap = message.maxHeap
                     ) ?: StoredRecordData(agentId, maxHeap = message.maxHeap)
                 )
-                agentStats.update { it.copy(maxHeap = message.maxHeap) }
+                maxHeap.update { message.maxHeap }
             }
             is StateFromAgent -> message.payload.run {
                 val metric = Metric(agentMetric.timeStamp, Memory(agentMetric.memory.heap))
@@ -100,12 +100,11 @@ class Plugin(
             //TODO it should be remove when service group would be implemented
             if (_activeRecord.value == null) {
                 _activeRecord.update {
-                    ActiveRecord(currentTimeMillis(), agentStats.value.maxHeap).also {
+                    ActiveRecord(currentTimeMillis(), maxHeap.value).also {
                         initSendRecord(it)
                         initPersistRecord(it)
                     }
                 }
-                agentStats.updateAndGet { it.copy(isMonitoring = true) }
                 logger.info { "Record has started " }
                 StartAgentRecord(StartRecordPayload(
                     refreshRate = refreshRate
@@ -117,11 +116,11 @@ class Plugin(
             val recordData = _activeRecord.getAndUpdate { null }?.stopRecording()?.let { dao ->
                 storeClient.updateRecordData(agentId, dao)
             }
-            agentStats.update { it.copy(isMonitoring = false) }
             StopAgentRecord(StopRecordPayload(false, recordData?.breaks ?: emptyList())).toActionResult()
         }
-        is RecordData -> {
-            ActionResult(StatusCodes.OK, agentStats.value)
+        is RecordData -> action.payload.run {
+            val stats = storeClient.loadRecordData(agentId, instances, from..to)
+            ActionResult(StatusCodes.OK, stats.copy(maxHeap = maxHeap.value,isMonitoring = _activeRecord.value != null))
         }
         else -> {
             logger.info { "Action '$action' is not supported!" }

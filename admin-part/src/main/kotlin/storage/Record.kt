@@ -35,16 +35,32 @@ data class InstanceData(
     override fun equals(other: Any?): Boolean = other is InstanceData && instanceId == other.instanceId
 
     override fun hashCode(): Int = instanceId.hashCode()
-
 }
+
+internal suspend fun StoreClient.loadRecordData(
+    agentId: String,
+    instances: Set<String>,
+    range: LongRange,
+): AgentsStats = findById<StoredRecordData>(agentId)?.let { data ->
+    val breaks = data.breaks.mapNotNull { it.takeIf { it in range } }
+    //TODO some validation
+    val series = instances.mapNotNull { instanceId ->
+        findById<InstanceData>(instanceId)?.let { instanceData ->
+            instanceData.copy(
+                metrics = instanceData.metrics.filter { it.timeStamp in range }
+            )
+        }
+    }.toSeries()
+    AgentsStats(brakes = breaks, series = series)
+} ?: AgentsStats()
+
 
 @Serializable
 internal data class StoredRecordData(
     @Id val id: String,
     val maxHeap: Long,
     val breaks: List<Long> = emptyList(),
-    @StreamSerialization(SerializationType.KRYO, CompressType.ZSTD, [])
-    val instances: Set<InstanceData> = emptySet(),
+    val instances: Set<String> = emptySet(),
 )
 
 internal suspend fun StoreClient.updateRecordData(
@@ -57,17 +73,17 @@ internal suspend fun StoreClient.updateRecordData(
             store(it.copy(metrics = it.metrics + metrics))
         } ?: store(InstanceData(instanceId, metrics)))
     }
-    return findById<StoredRecordData>(agentId)?.let {
-        store(it.copy(
-            breaks = it.breaks + (record.`break`?.let { listOf(it) } ?: emptyList()),
-            instances = it.instances + instances
+    return findById<StoredRecordData>(agentId)?.let { recordData ->
+        store(recordData.copy(
+            breaks = recordData.breaks + (record.`break`?.let { listOf(it) } ?: emptyList()),
+            instances = recordData.instances + instances.map { it.instanceId }
         )).also { logger.info { "Updated recorde saved $it" } }
     } ?: store(
         StoredRecordData(
             id = agentId,
             maxHeap = record.maxHeap,
             breaks = record.`break`?.let { listOf(it) } ?: emptyList(),
-            instances = instances
+            instances = instances.map { it.instanceId }.toSet()
         )
     ).also { logger.info { "New Recode saved $it" } }
 }

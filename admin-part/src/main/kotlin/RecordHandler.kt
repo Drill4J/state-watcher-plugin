@@ -18,7 +18,6 @@ package com.epam.drill.plugins.tracer
 import com.epam.drill.plugins.tracer.api.*
 import com.epam.drill.plugins.tracer.storage.*
 import com.epam.drill.plugins.tracer.util.*
-import kotlinx.atomicfu.*
 
 
 fun Plugin.initSendRecord(activeRecord: ActiveRecord) = activeRecord.initSendHandler { start, metrics ->
@@ -26,11 +25,9 @@ fun Plugin.initSendRecord(activeRecord: ActiveRecord) = activeRecord.initSendHan
 }
 
 fun Plugin.initPersistRecord(activeRecord: ActiveRecord) = activeRecord.initPersistHandler { metrics ->
-    val storedActiveRecord = storeClient.updateRecordData(agentId, RecordDao(
+    storeClient.updateRecordData(agentId, RecordDao(
         maxHeap = activeRecord.maxHeap,
         metrics = metrics.asSequence().associate {
             it.key to it.value.toList()
         }))
-    val series = storedActiveRecord.instances.toSeries()
-    agentStats.update { AgentsStats(activeRecord.maxHeap, true, storedActiveRecord.breaks, series) }
 }
