@@ -32,16 +32,10 @@ data class InstanceData(
     @Id val instanceId: String,
     val metrics: List<Metric>,
 ) {
+    override fun equals(other: Any?): Boolean = other is InstanceData && instanceId == other.instanceId
 
-    override fun equals(other: Any?): Boolean {
-        if (this === other) return true
-        if (javaClass != other?.javaClass) return false
-        return instanceId == (other as InstanceData).instanceId
-    }
+    override fun hashCode(): Int = instanceId.hashCode()
 
-    override fun hashCode(): Int {
-        return instanceId.hashCode()
-    }
 }
 
 @Serializable

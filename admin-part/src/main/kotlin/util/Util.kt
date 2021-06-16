@@ -53,10 +53,14 @@ fun Map<String, List<Metric>>.toSeries() = map { Series(it.key, it.value) }
 
 fun Iterable<InstanceData>.toSeries() = map { Series(it.instanceId, it.metrics) }
 
+
+//TODO PLS FIX ME
 operator fun Set<InstanceData>.plus(
     other: Set<InstanceData>,
-): Set<InstanceData> = ArrayList<InstanceData>(this).also { list ->
+): Set<InstanceData> = toMutableSet().apply {
     other.forEach { instanceData ->
-        list.firstOrNull { it == instanceData }?.metrics?.plus(instanceData.metrics) ?: list.add(instanceData)
+        add(find { it == instanceData }?.let {
+            it.copy(metrics = it.metrics + instanceData.metrics)
+        }.also { remove(instanceData) } ?: instanceData)
     }
-}.toSet()
+}
