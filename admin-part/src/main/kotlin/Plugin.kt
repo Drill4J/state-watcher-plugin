@@ -51,7 +51,7 @@ class Plugin(
 
     private val logger = logger(agentInfo.id)
 
-    private val buildVersion = agentInfo.buildVersion
+    internal val buildVersion = agentInfo.buildVersion
 
     internal val agentId = agentInfo.id
 
@@ -61,7 +61,7 @@ class Plugin(
 
 
     override suspend fun initialize() {
-        storeClient.loadRecordData(agentId)?.let { record ->
+        storeClient.loadRecordData(CompositeId(agentId, buildVersion))?.let { record ->
             maxHeap.update { record.maxHeap }
         }
     }
@@ -75,9 +75,9 @@ class Plugin(
             is InitializedAgent -> {
                 logger.info { "Plugin $id for instance $instanceId is initialized, max heap size = ${message.maxHeap}" }
                 storeClient.store(
-                    storeClient.loadRecordData(agentId)?.copy(
+                    storeClient.loadRecordData(CompositeId(agentId, buildVersion))?.copy(
                         maxHeap = message.maxHeap
-                    ) ?: StoredRecordData(agentId, maxHeap = message.maxHeap)
+                    ) ?: StoredRecordData(CompositeId(agentId, buildVersion), maxHeap = message.maxHeap)
                 )
                 maxHeap.update { message.maxHeap }
             }
@@ -114,13 +114,14 @@ class Plugin(
         is StopRecord -> {
             logger.info { "Record has stopped " }
             val recordData = _activeRecord.getAndUpdate { null }?.stopRecording()?.let { dao ->
-                storeClient.updateRecordData(agentId, dao)
+                storeClient.updateRecordData(CompositeId(agentId, buildVersion), dao)
             }
             StopAgentRecord(StopRecordPayload(false, recordData?.breaks ?: emptyList())).toActionResult()
         }
         is RecordData -> action.payload.run {
-            val stats = storeClient.loadRecordData(agentId, instances, from..to)
-            ActionResult(StatusCodes.OK, stats.copy(maxHeap = maxHeap.value,isMonitoring = _activeRecord.value != null))
+            val stats = storeClient.loadRecordData(CompositeId(agentId, buildVersion), instanceIds, from..to)
+            ActionResult(StatusCodes.OK,
+                stats.copy(maxHeap = maxHeap.value, isMonitoring = _activeRecord.value != null))
         }
         else -> {
             logger.info { "Action '$action' is not supported!" }

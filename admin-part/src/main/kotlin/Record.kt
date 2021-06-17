@@ -84,5 +84,4 @@ class ActiveRecord(
     fun initPersistHandler(handler: PersistRecordHandler) = _persistHandler.update {
         it ?: handler
     }
-
 }

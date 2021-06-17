@@ -25,7 +25,10 @@ val logger = KotlinLogging.logger("Storage")
 
 class RecordDao(val maxHeap: Long, val `break`: Long? = null, val metrics: Map<String, List<Metric>>)
 
-internal suspend fun StoreClient.loadRecordData(agentId: String) = findById<StoredRecordData>(agentId)
+internal suspend fun StoreClient.loadRecordData(id: CompositeId) = findById<StoredRecordData>(id)
+
+@Serializable
+data class CompositeId(val agentId: String, val buildVersion: String)
 
 @Serializable
 data class InstanceData(
@@ -38,10 +41,10 @@ data class InstanceData(
 }
 
 internal suspend fun StoreClient.loadRecordData(
-    agentId: String,
+    id: CompositeId,
     instances: Set<String>,
     range: LongRange,
-): AgentsStats = findById<StoredRecordData>(agentId)?.let { data ->
+): AgentsStats = findById<StoredRecordData>(id)?.let { data ->
     val breaks = data.breaks.mapNotNull { it.takeIf { it in range } }
     //TODO some validation
     val series = instances.mapNotNull { instanceId ->
@@ -57,14 +60,14 @@ internal suspend fun StoreClient.loadRecordData(
 
 @Serializable
 internal data class StoredRecordData(
-    @Id val id: String,
+    @Id val id: CompositeId,
     val maxHeap: Long,
     val breaks: List<Long> = emptyList(),
     val instances: Set<String> = emptySet(),
 )
 
 internal suspend fun StoreClient.updateRecordData(
-    agentId: String,
+    compositeId: CompositeId,
     record: RecordDao,
 ): StoredRecordData {
     val instances = mutableSetOf<InstanceData>()
@@ -73,14 +76,14 @@ internal suspend fun StoreClient.updateRecordData(
             store(it.copy(metrics = it.metrics + metrics))
         } ?: store(InstanceData(instanceId, metrics)))
     }
-    return findById<StoredRecordData>(agentId)?.let { recordData ->
+    return findById<StoredRecordData>(compositeId)?.let { recordData ->
         store(recordData.copy(
             breaks = recordData.breaks + (record.`break`?.let { listOf(it) } ?: emptyList()),
             instances = recordData.instances + instances.map { it.instanceId }
         )).also { logger.info { "Updated recorde saved $it" } }
     } ?: store(
         StoredRecordData(
-            id = agentId,
+            id = compositeId,
             maxHeap = record.maxHeap,
             breaks = record.`break`?.let { listOf(it) } ?: emptyList(),
             instances = instances.map { it.instanceId }.toSet()
