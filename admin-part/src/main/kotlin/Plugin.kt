@@ -141,7 +141,7 @@ class Plugin(
     internal suspend fun updateMetric(agentsStats: AgentsActiveStats) = send(
         buildVersion,
         Routes.Metrics.HeapState(Routes.Metrics()).let { Routes.Metrics.HeapState.UpdateHeap(it) },
-        agentsStats.also { logger.info { "Send metric $it" } }
+        agentsStats
     )
 
     internal suspend fun send(buildVersion: String, destination: Any, message: Any) {

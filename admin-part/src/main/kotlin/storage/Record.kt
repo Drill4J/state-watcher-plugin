@@ -42,12 +42,12 @@ data class InstanceData(
 
 internal suspend fun StoreClient.loadRecordData(
     id: CompositeId,
-    instances: Set<String>,
+    instances: Set<String> = emptySet(),
     range: LongRange,
 ): AgentsStats = findById<StoredRecordData>(id)?.let { data ->
     val breaks = data.breaks.mapNotNull { it.takeIf { it in range } }
-    //TODO some validation
-    val series = instances.mapNotNull { instanceId ->
+    val instancesToLoad = instances.takeIf { it.isNotEmpty() } ?: data.instances
+    val series = instancesToLoad.mapNotNull { instanceId ->
         findById<InstanceData>(instanceId)?.let { instanceData ->
             instanceData.copy(
                 metrics = instanceData.metrics.filter { it.timeStamp in range }

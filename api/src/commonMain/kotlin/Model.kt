@@ -38,7 +38,7 @@ data class Memory(
 data class StartRecordPayload(val refreshRate: Long = 5000L)
 
 @Serializable
-data class RecordDataSettings(val instanceIds: Set<String>, val from: Long, val to: Long)
+data class RecordDataSettings(val from: Long, val to: Long, val instanceIds: Set<String> = emptySet())
 
 
 @Serializable
