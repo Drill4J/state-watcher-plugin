@@ -23,9 +23,10 @@ import mu.*
 
 val logger = KotlinLogging.logger("Storage")
 
-class RecordDao(val maxHeap: Long, val `break`: Long? = null, val metrics: Map<String, List<Metric>>)
-
 internal suspend fun StoreClient.loadRecordData(id: CompositeId) = findById<StoredRecordData>(id)
+
+class RecordDao(val maxHeap: Long, val `break`: Break? = null, val metrics: Map<String, List<Metric>>)
+
 
 @Serializable
 data class CompositeId(val agentId: String, val buildVersion: String)
@@ -45,7 +46,7 @@ internal suspend fun StoreClient.loadRecordData(
     instances: Set<String> = emptySet(),
     range: LongRange,
 ): AgentsStats = findById<StoredRecordData>(id)?.let { data ->
-    val breaks = data.breaks.mapNotNull { it.takeIf { it in range } }
+    val breaks = data.breaks.mapNotNull { it.takeIf { it.to in range } }
     val instancesToLoad = instances.takeIf { it.isNotEmpty() } ?: data.instances
     val series = instancesToLoad.mapNotNull { instanceId ->
         findById<InstanceData>(instanceId)?.let { instanceData ->
@@ -54,7 +55,7 @@ internal suspend fun StoreClient.loadRecordData(
             )
         }
     }.toSeries()
-    AgentsStats(brakes = breaks, series = series)
+    AgentsStats(breaks = breaks, series = series)
 } ?: AgentsStats()
 
 
@@ -62,7 +63,7 @@ internal suspend fun StoreClient.loadRecordData(
 internal data class StoredRecordData(
     @Id val id: CompositeId,
     val maxHeap: Long,
-    val breaks: List<Long> = emptyList(),
+    val breaks: List<Break> = emptyList(),
     val instances: Set<String> = emptySet(),
 )
 
@@ -80,7 +81,7 @@ internal suspend fun StoreClient.updateRecordData(
         store(recordData.copy(
             breaks = recordData.breaks + (record.`break`?.let { listOf(it) } ?: emptyList()),
             instances = recordData.instances + instances.map { it.instanceId }
-        )).also { logger.info { "Updated recorde saved $it" } }
+        )).also { logger.trace { "Updated recorde saved $it" } }
     } ?: store(
         StoredRecordData(
             id = compositeId,
@@ -88,5 +89,5 @@ internal suspend fun StoreClient.updateRecordData(
             breaks = record.`break`?.let { listOf(it) } ?: emptyList(),
             instances = instances.map { it.instanceId }.toSet()
         )
-    ).also { logger.info { "New Recode saved $it" } }
+    ).also { logger.trace { "New Recode saved $it" } }
 }

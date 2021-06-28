@@ -23,6 +23,7 @@ import com.epam.drill.plugins.tracer.api.*
 import com.epam.drill.plugins.tracer.api.Memory
 import com.epam.drill.plugins.tracer.api.routes.*
 import com.epam.drill.plugins.tracer.common.api.*
+import com.epam.drill.plugins.tracer.common.api.Break
 import com.epam.drill.plugins.tracer.common.api.StartRecordPayload
 import com.epam.drill.plugins.tracer.storage.*
 import com.epam.drill.plugins.tracer.util.*
@@ -116,7 +117,9 @@ class Plugin(
             val recordData = _activeRecord.getAndUpdate { null }?.stopRecording()?.let { dao ->
                 storeClient.updateRecordData(CompositeId(agentId, buildVersion), dao)
             }
-            StopAgentRecord(StopRecordPayload(false, recordData?.breaks ?: emptyList())).toActionResult()
+            //TODO fix
+            StopAgentRecord(StopRecordPayload(false,
+                recordData?.breaks?.map { Break(it.from, it.to) } ?: emptyList())).toActionResult()
         }
         is RecordData -> action.payload.run {
             val stats = storeClient.loadRecordData(CompositeId(agentId, buildVersion), instanceIds, from..to)

@@ -45,7 +45,7 @@ data class RecordDataSettings(val from: Long, val to: Long, val instanceIds: Set
 data class AgentsStats(
     val maxHeap: Long = 0,
     val isMonitoring: Boolean = false,
-    val brakes: List<Long> = emptyList(),
+    val breaks: List<Break> = emptyList(),
     val series: List<Series> = emptyList(),
 )
 
@@ -59,3 +59,5 @@ data class AgentsActiveStats(
 @Serializable
 data class Series(val instanceId: String, val data: List<Metric>)
 
+@Serializable
+data class Break(val from: Long, val to: Long)

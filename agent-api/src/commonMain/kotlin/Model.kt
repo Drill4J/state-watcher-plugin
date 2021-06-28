@@ -26,7 +26,7 @@ data class StartRecordPayload(
 @Serializable
 data class StopRecordPayload(
     val isMonitoring: Boolean = false,
-    val brakes: List<Long>,
+    val breaks: List<Break>,
 )
 
 @Serializable
@@ -45,4 +45,5 @@ data class Memory(
     val heap: Long,
 )
 
-
+@Serializable
+data class Break(val from: Long, val to: Long)

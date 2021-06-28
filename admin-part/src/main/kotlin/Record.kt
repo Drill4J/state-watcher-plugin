@@ -68,7 +68,7 @@ class ActiveRecord(
         it.put(instanceId, map.add(metric))
     }
 
-    fun stopRecording() = RecordDao(maxHeap, currentTimeMillis(), _metrics.value.asSequence().associate {
+    fun stopRecording() = RecordDao(maxHeap, Break(start, currentTimeMillis()), _metrics.value.asSequence().associate {
         it.key to it.value.toList()
     }.toMap()).also { cancelJobs() }
 
