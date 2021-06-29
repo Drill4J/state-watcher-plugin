@@ -52,7 +52,6 @@ data class AgentsStats(
 @Serializable
 data class AgentsActiveStats(
     val maxHeap: Long = 0,
-    val start: Long = 0,
     val series: List<Series> = emptyList(),
 )
 

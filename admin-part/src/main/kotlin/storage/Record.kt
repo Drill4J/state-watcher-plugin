@@ -21,11 +21,12 @@ import com.epam.kodux.*
 import kotlinx.serialization.*
 import mu.*
 
+
 val logger = KotlinLogging.logger("Storage")
 
 internal suspend fun StoreClient.loadRecordData(id: CompositeId) = findById<StoredRecordData>(id)
 
-class RecordDao(val maxHeap: Long, val `break`: Break? = null, val metrics: Map<String, List<Metric>>)
+class RecordDao(val maxHeap: Long, val start: Long, val stop: Long? = null, val metrics: Map<String, List<Metric>>)
 
 
 @Serializable
@@ -45,8 +46,9 @@ internal suspend fun StoreClient.loadRecordData(
     id: CompositeId,
     instances: Set<String> = emptySet(),
     range: LongRange,
+    start: Long?,
 ): AgentsStats = findById<StoredRecordData>(id)?.let { data ->
-    val breaks = data.breaks.mapNotNull { it.takeIf { it.to in range } }
+    val breaks = data.breaks.mapNotNull { it.takeIf { it.to in range } }.getGap(start)
     val instancesToLoad = instances.takeIf { it.isNotEmpty() } ?: data.instances
     val series = instancesToLoad.mapNotNull { instanceId ->
         findById<InstanceData>(instanceId)?.let { instanceData ->
@@ -79,14 +81,14 @@ internal suspend fun StoreClient.updateRecordData(
     }
     return findById<StoredRecordData>(compositeId)?.let { recordData ->
         store(recordData.copy(
-            breaks = recordData.breaks + (record.`break`?.let { listOf(it) } ?: emptyList()),
+            breaks = recordData.breaks + (record.stop?.let { listOf(Break(record.start, it)) } ?: emptyList()),
             instances = recordData.instances + instances.map { it.instanceId }
         )).also { logger.trace { "Updated recorde saved $it" } }
     } ?: store(
         StoredRecordData(
             id = compositeId,
             maxHeap = record.maxHeap,
-            breaks = record.`break`?.let { listOf(it) } ?: emptyList(),
+            breaks = record.stop?.let { listOf(Break(record.start, it)) } ?: emptyList(),
             instances = instances.map { it.instanceId }.toSet()
         )
     ).also { logger.trace { "New Recode saved $it" } }

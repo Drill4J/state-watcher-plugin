@@ -58,7 +58,7 @@ class Plugin(
 
     private val _activeRecord = atomic<ActiveRecord?>(null)
 
-    internal val maxHeap = atomic(0L)
+    private val maxHeap = atomic(0L)
 
 
     override suspend fun initialize() {
@@ -114,15 +114,22 @@ class Plugin(
         }
         is StopRecord -> {
             logger.info { "Record has stopped " }
-            val recordData = _activeRecord.getAndUpdate { null }?.stopRecording()?.let { dao ->
+
+            val activeRecord = _activeRecord.getAndUpdate { null }
+            val recordData = activeRecord?.stopRecording()?.let { dao ->
                 storeClient.updateRecordData(CompositeId(agentId, buildVersion), dao)
             }
             //TODO fix
             StopAgentRecord(StopRecordPayload(false,
-                recordData?.breaks?.map { Break(it.from, it.to) } ?: emptyList())).toActionResult()
+                recordData?.breaks?.getGap(activeRecord.start)?.map { Break(it.from, it.to) }
+                    ?: emptyList())).toActionResult()
         }
         is RecordData -> action.payload.run {
-            val stats = storeClient.loadRecordData(CompositeId(agentId, buildVersion), instanceIds, from..to)
+            val stats = storeClient.loadRecordData(CompositeId(agentId, buildVersion),
+                instanceIds,
+                from..to,
+                _activeRecord.value?.start
+            )
             ActionResult(StatusCodes.OK,
                 stats.copy(maxHeap = maxHeap.value, isMonitoring = _activeRecord.value != null))
         }

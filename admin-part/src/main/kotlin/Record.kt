@@ -24,11 +24,11 @@ import kotlinx.collections.immutable.*
 import kotlinx.coroutines.*
 
 
-typealias ActiveRecordHandler = suspend ActiveRecord.(Long, Map<String, List<Metric>>) -> Unit
+typealias ActiveRecordHandler = suspend ActiveRecord.(Map<String, List<Metric>>) -> Unit
 typealias PersistRecordHandler = suspend ActiveRecord.(Map<String, List<Metric>>) -> Unit
 
 class ActiveRecord(
-    private val start: Long,
+    val start: Long,
     val maxHeap: Long,
 ) {
     private val _metrics = atomic(persistentHashMapOf<String, PersistentList<Metric>>())
@@ -44,7 +44,7 @@ class ActiveRecord(
             delay(5000)
             val metrics = _metrics.getAndUpdate { it.clear() }
             _sendHandler.value?.let { handler ->
-                handler(start, metrics)
+                handler(metrics)
             }
             _metricsToPersist.update { map ->
                 (map + metrics).asSequence().associate {
@@ -68,7 +68,7 @@ class ActiveRecord(
         it.put(instanceId, map.add(metric))
     }
 
-    fun stopRecording() = RecordDao(maxHeap, Break(start, currentTimeMillis()), _metrics.value.asSequence().associate {
+    fun stopRecording() = RecordDao(maxHeap, start, currentTimeMillis(), _metrics.value.asSequence().associate {
         it.key to it.value.toList()
     }.toMap()).also { cancelJobs() }
 

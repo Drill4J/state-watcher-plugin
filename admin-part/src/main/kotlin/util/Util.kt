@@ -49,7 +49,7 @@ operator fun Map<String, List<Metric>>.plus(
     }
 }
 
-fun Map<String, List<Metric>>.toSeries() = map { Series(it.key, it.value) }
+fun Map<String, List<Metric>>.toSeries() = map { Series(it.key, it.value.toList()) }
 
 fun Iterable<InstanceData>.toSeries() = map { Series(it.instanceId, it.metrics) }
 
@@ -63,4 +63,15 @@ operator fun Set<InstanceData>.plus(
             it.copy(metrics = it.metrics + instanceData.metrics)
         }.also { remove(instanceData) } ?: instanceData)
     }
+}
+
+fun Iterable<Break>.getGap(start: Long?) = run {
+    val breaks = mutableListOf<Break>()
+    val iterator = iterator()
+    while (iterator.hasNext()) {
+        val current = iterator.next().to
+        val next = if (iterator.hasNext()) iterator.next().from else start ?: break
+        breaks.add(Break(current, next))
+    }
+    breaks
 }

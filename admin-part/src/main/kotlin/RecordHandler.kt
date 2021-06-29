@@ -20,14 +20,19 @@ import com.epam.drill.plugins.tracer.storage.*
 import com.epam.drill.plugins.tracer.util.*
 
 
-fun Plugin.initSendRecord(activeRecord: ActiveRecord) = activeRecord.initSendHandler { start, metrics ->
-    updateMetric(AgentsActiveStats(maxHeap = activeRecord.maxHeap, start = start, series = metrics.toSeries()))
+fun Plugin.initSendRecord(activeRecord: ActiveRecord) = activeRecord.initSendHandler { metrics ->
+    updateMetric(AgentsActiveStats(maxHeap = activeRecord.maxHeap, series = metrics.toSeries()))
 }
 
 fun Plugin.initPersistRecord(activeRecord: ActiveRecord) = activeRecord.initPersistHandler { metrics ->
-    storeClient.updateRecordData(CompositeId(agentId, buildVersion), RecordDao(
-        maxHeap = activeRecord.maxHeap,
-        metrics = metrics.asSequence().associate {
-            it.key to it.value.toList()
-        }))
+    storeClient.updateRecordData(
+        CompositeId(agentId, buildVersion),
+        RecordDao(
+            maxHeap = activeRecord.maxHeap,
+            start = activeRecord.start,
+            metrics = metrics.asSequence().associate {
+                it.key to it.value.toList()
+            }
+        )
+    )
 }
