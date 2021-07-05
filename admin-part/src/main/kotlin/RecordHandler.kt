@@ -26,7 +26,7 @@ fun Plugin.initSendRecord(activeRecord: ActiveRecord) = activeRecord.initSendHan
 
 fun Plugin.initPersistRecord(activeRecord: ActiveRecord) = activeRecord.initPersistHandler { metrics ->
     storeClient.updateRecordData(
-        CompositeId(agentId, buildVersion),
+        AgentId(agentId, buildVersion),
         RecordDao(
             maxHeap = activeRecord.maxHeap,
             start = activeRecord.start,

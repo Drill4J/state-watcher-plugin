@@ -21,6 +21,7 @@ import kotlinx.serialization.*
 data class StartRecordPayload(
     val isMonitoring: Boolean = true,
     val refreshRate: Long = 5000L,
+    val breaks: List<Break>,
 )
 
 @Serializable

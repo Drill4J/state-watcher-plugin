@@ -62,7 +62,7 @@ class Plugin(
 
 
     override suspend fun initialize() {
-        storeClient.loadRecordData(CompositeId(agentId, buildVersion))?.let { record ->
+        storeClient.loadRecordData(AgentId(agentId, buildVersion))?.let { record ->
             maxHeap.update { record.maxHeap }
         }
     }
@@ -76,9 +76,9 @@ class Plugin(
             is InitializedAgent -> {
                 logger.info { "Plugin $id for instance $instanceId is initialized, max heap size = ${message.maxHeap}" }
                 storeClient.store(
-                    storeClient.loadRecordData(CompositeId(agentId, buildVersion))?.copy(
+                    storeClient.loadRecordData(AgentId(agentId, buildVersion))?.copy(
                         maxHeap = message.maxHeap
-                    ) ?: StoredRecordData(CompositeId(agentId, buildVersion), maxHeap = message.maxHeap)
+                    ) ?: StoredRecordData(AgentId(agentId, buildVersion), maxHeap = message.maxHeap)
                 )
                 maxHeap.update { message.maxHeap }
             }
@@ -98,17 +98,22 @@ class Plugin(
         action: Action,
     ): ActionResult = when (action) {
         is StartRecord -> action.payload.run {
-            //TODO it should be remove when service group would be implemented
             if (_activeRecord.value == null) {
-                _activeRecord.update {
+                val record = _activeRecord.updateAndGet {
                     ActiveRecord(currentTimeMillis(), maxHeap.value).also {
                         initSendRecord(it)
                         initPersistRecord(it)
                     }
                 }
                 logger.info { "Record has started " }
+                val breaks = storeClient.loadRecordData(
+                    AgentId(agentId, buildVersion)
+                )?.breaks?.getGap(record?.start)?.map {
+                    Break(it.from, it.to)
+                } ?: emptyList()
                 StartAgentRecord(StartRecordPayload(
-                    refreshRate = refreshRate
+                    refreshRate = refreshRate,
+                    breaks = breaks
                 )).toActionResult()
             } else ActionResult(StatusCodes.BAD_REQUEST, "Recode already started")
         }
@@ -117,7 +122,7 @@ class Plugin(
 
             val activeRecord = _activeRecord.getAndUpdate { null }
             val recordData = activeRecord?.stopRecording()?.let { dao ->
-                storeClient.updateRecordData(CompositeId(agentId, buildVersion), dao)
+                storeClient.updateRecordData(AgentId(agentId, buildVersion), dao)
             }
             //TODO fix
             StopAgentRecord(StopRecordPayload(false,
@@ -125,13 +130,17 @@ class Plugin(
                     ?: emptyList())).toActionResult()
         }
         is RecordData -> action.payload.run {
-            val stats = storeClient.loadRecordData(CompositeId(agentId, buildVersion),
+            val stats = storeClient.loadRecordData(
+                AgentId(agentId, buildVersion),
                 instanceIds,
                 from..to,
-                _activeRecord.value?.start
-            )
+                )
             ActionResult(StatusCodes.OK,
-                stats.copy(maxHeap = maxHeap.value, isMonitoring = _activeRecord.value != null))
+                stats.copy(
+                    maxHeap = maxHeap.value,
+                    isMonitoring = _activeRecord.value != null,
+                    breaks = stats.breaks.getGap(_activeRecord.value?.start),
+                ))
         }
         else -> {
             logger.info { "Action '$action' is not supported!" }
@@ -151,7 +160,7 @@ class Plugin(
     internal suspend fun updateMetric(agentsStats: AgentsActiveStats) = send(
         buildVersion,
         Routes.Metrics.HeapState(Routes.Metrics()).let { Routes.Metrics.HeapState.UpdateHeap(it) },
-        agentsStats
+        agentsStats.also { println("Stats $it ") }
     )
 
     internal suspend fun send(buildVersion: String, destination: Any, message: Any) {

@@ -24,13 +24,13 @@ import mu.*
 
 val logger = KotlinLogging.logger("Storage")
 
-internal suspend fun StoreClient.loadRecordData(id: CompositeId) = findById<StoredRecordData>(id)
+internal suspend fun StoreClient.loadRecordData(id: AgentId) = findById<StoredRecordData>(id)
 
 class RecordDao(val maxHeap: Long, val start: Long, val stop: Long? = null, val metrics: Map<String, List<Metric>>)
 
 
 @Serializable
-data class CompositeId(val agentId: String, val buildVersion: String)
+data class AgentId(val agentId: String, val buildVersion: String)
 
 @Serializable
 data class InstanceData(
@@ -43,34 +43,32 @@ data class InstanceData(
 }
 
 internal suspend fun StoreClient.loadRecordData(
-    id: CompositeId,
+    id: AgentId,
     instances: Set<String> = emptySet(),
-    range: LongRange,
-    start: Long?,
+    range: LongRange = LongRange.EMPTY,
 ): AgentsStats = findById<StoredRecordData>(id)?.let { data ->
-    val breaks = data.breaks.mapNotNull { it.takeIf { it.to in range } }.getGap(start)
+    val breaks = data.breaks.mapNotNull { it.takeIf { it.to in range || range.isEmpty() } }
     val instancesToLoad = instances.takeIf { it.isNotEmpty() } ?: data.instances
     val series = instancesToLoad.mapNotNull { instanceId ->
         findById<InstanceData>(instanceId)?.let { instanceData ->
             instanceData.copy(
-                metrics = instanceData.metrics.filter { it.timeStamp in range }
+                metrics = instanceData.metrics.filter { it.timeStamp in range || range.isEmpty() }
             )
         }
     }.toSeries()
     AgentsStats(breaks = breaks, series = series)
 } ?: AgentsStats()
 
-
 @Serializable
 internal data class StoredRecordData(
-    @Id val id: CompositeId,
+    @Id val id: AgentId,
     val maxHeap: Long,
     val breaks: List<Break> = emptyList(),
     val instances: Set<String> = emptySet(),
 )
 
 internal suspend fun StoreClient.updateRecordData(
-    compositeId: CompositeId,
+    agentId: AgentId,
     record: RecordDao,
 ): StoredRecordData {
     val instances = mutableSetOf<InstanceData>()
@@ -79,14 +77,14 @@ internal suspend fun StoreClient.updateRecordData(
             store(it.copy(metrics = it.metrics + metrics))
         } ?: store(InstanceData(instanceId, metrics)))
     }
-    return findById<StoredRecordData>(compositeId)?.let { recordData ->
+    return findById<StoredRecordData>(agentId)?.let { recordData ->
         store(recordData.copy(
             breaks = recordData.breaks + (record.stop?.let { listOf(Break(record.start, it)) } ?: emptyList()),
             instances = recordData.instances + instances.map { it.instanceId }
         )).also { logger.trace { "Updated recorde saved $it" } }
     } ?: store(
         StoredRecordData(
-            id = compositeId,
+            id = agentId,
             maxHeap = record.maxHeap,
             breaks = record.stop?.let { listOf(Break(record.start, it)) } ?: emptyList(),
             instances = instances.map { it.instanceId }.toSet()

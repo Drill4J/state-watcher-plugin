@@ -22,6 +22,7 @@ import com.epam.drill.plugins.tracer.util.AsyncJobDispatcher
 import kotlinx.atomicfu.*
 import kotlinx.collections.immutable.*
 import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.*
 
 
 typealias ActiveRecordHandler = suspend ActiveRecord.(Map<String, List<Metric>>) -> Unit
@@ -46,19 +47,22 @@ class ActiveRecord(
             _sendHandler.value?.let { handler ->
                 handler(metrics)
             }
-            _metricsToPersist.update { map ->
-                (map + metrics).asSequence().associate {
-                    it.key to it.value.toPersistentList()
-                }.toPersistentHashMap()
-            }
+            persistChannel.send(metrics)
         }
     }
 
+    private val persistChannel = Channel<Map<String, List<Metric>>>()
+
     private val persistJob = AsyncJobDispatcher.launch {
-        while (true) {
-            delay(10000)
+        while (!persistChannel.isClosedForReceive) {
             _persistHandler.value?.let { handler ->
-                handler(_metricsToPersist.getAndUpdate { it.clear() })
+                delay(10000)
+                val metrics = mutableListOf<Map<String, List<Metric>>>()
+                while (!persistChannel.isEmpty && !persistChannel.isClosedForReceive) {
+                    metrics.add(persistChannel.receive())
+                }
+                val metricsToPersist = metrics.takeIf { it.isNotEmpty() }?.reduce { a1, a2 -> a1 + a2 } ?: emptyMap()
+                handler(metricsToPersist)
             }
         }
     }
@@ -68,13 +72,18 @@ class ActiveRecord(
         it.put(instanceId, map.add(metric))
     }
 
-    fun stopRecording() = RecordDao(maxHeap, start, currentTimeMillis(), _metrics.value.asSequence().associate {
-        it.key to it.value.toList()
-    }.toMap()).also { cancelJobs() }
+    suspend fun stopRecording() = run {
+        cancelJobs()
+        val metrics = _metrics.value
+        val stopRecordTimeStamp = metrics.values.firstOrNull()?.firstOrNull()?.timeStamp ?: currentTimeMillis()
+        RecordDao(maxHeap, start, stopRecordTimeStamp, metrics.asSequence().associate {
+            it.key to it.value.toList()
+        }.toMap())
+    }
 
-    private fun cancelJobs() {
+    private suspend fun cancelJobs() {
         sendJob.cancel()
-        persistJob.cancel()
+        persistJob.join()
     }
 
     fun initSendHandler(handler: ActiveRecordHandler) = _sendHandler.update {
