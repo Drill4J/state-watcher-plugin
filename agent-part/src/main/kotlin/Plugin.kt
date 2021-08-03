@@ -20,7 +20,6 @@ import com.epam.drill.plugin.api.processing.*
 import com.epam.drill.plugins.tracer.common.api.*
 import com.epam.drill.plugins.tracer.util.AsyncJobDispatcher
 import kotlinx.atomicfu.*
-import kotlinx.collections.immutable.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.ticker
 import kotlinx.serialization.json.Json
@@ -76,7 +75,7 @@ class Plugin(
     private fun memJob(refreshRate: Long = 5000) = AsyncJobDispatcher.launch {
         for (event in ticker(refreshRate)) {
             sendMessage(StateFromAgent(StatePayload(
-                AgentMetric(System.currentTimeMillis(), Memory(Runtime.getRuntime().freeMemory()))))
+                AgentMetric(System.currentTimeMillis(), AgentMemory(Runtime.getRuntime().freeMemory()))))
             )
         }
     }

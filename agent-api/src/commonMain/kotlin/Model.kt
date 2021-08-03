@@ -21,13 +21,13 @@ import kotlinx.serialization.*
 data class StartRecordPayload(
     val isMonitoring: Boolean = true,
     val refreshRate: Long = 5000L,
-    val breaks: List<Break>,
+    val breaks: List<AgentBreak>,
 )
 
 @Serializable
 data class StopRecordPayload(
     val isMonitoring: Boolean = false,
-    val breaks: List<Break>,
+    val breaks: List<AgentBreak>,
 )
 
 @Serializable
@@ -38,13 +38,13 @@ data class StatePayload(
 @Serializable
 data class AgentMetric(
     val timeStamp: Long,
-    val memory: Memory,
+    val memory: AgentMemory,
 )
 
 @Serializable
-data class Memory(
+data class AgentMemory(
     val heap: Long,
 )
 
 @Serializable
-data class Break(val from: Long, val to: Long)
+data class AgentBreak(val from: Long, val to: Long)

@@ -17,14 +17,11 @@ package com.epam.drill.plugins.tracer.util
 
 import com.epam.drill.plugins.tracer.Plugin.Companion.json
 import com.epam.drill.plugins.tracer.api.*
-import com.epam.drill.plugins.tracer.storage.*
 import com.epam.drill.plugins.tracer.storage.InstanceData
 import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.*
 import kotlinx.serialization.*
 import java.util.*
 import java.util.concurrent.*
-import kotlin.collections.ArrayList
 import kotlin.collections.HashMap
 
 
@@ -41,6 +38,7 @@ internal object AsyncJobDispatcher : CoroutineScope {
     override val coroutineContext = Executors.newFixedThreadPool(availableProcessors).asCoroutineDispatcher()
 }
 
+//TODO PLS FIX ME ?
 operator fun Map<String, List<Metric>>.plus(
     map: Map<String, List<Metric>>,
 ): Map<String, List<Metric>> = HashMap<String, List<Metric>>(this).apply {
@@ -54,7 +52,7 @@ fun Map<String, List<Metric>>.toSeries() = map { Series(it.key, it.value.toList(
 fun Iterable<InstanceData>.toSeries() = map { Series(it.instanceId, it.metrics) }
 
 
-//TODO PLS FIX ME
+//TODO PLS FIX ME ?
 operator fun Set<InstanceData>.plus(
     other: Set<InstanceData>,
 ): Set<InstanceData> = toMutableSet().apply {
@@ -65,13 +63,30 @@ operator fun Set<InstanceData>.plus(
     }
 }
 
+//TODO FIX (If some one see this i will be fired)
 fun Iterable<Break>.getGap(start: Long?) = run {
-    val breaks = mutableListOf<Break>()
+    val gaps = mutableListOf<Break>()
     val iterator = iterator()
-    while (iterator.hasNext()) {
-        val current = iterator.next().to
-        val next = if (iterator.hasNext()) iterator.next().from else start ?: break
-        breaks.add(Break(current, next))
+    if (iterator.hasNext()) {
+        var first = iterator.next()
+        if (iterator.hasNext()) {
+            while (iterator.hasNext()) {
+                val next = iterator.next()
+                gaps.add(Break(first.to, next.from))
+                first = if (iterator.hasNext()) {
+                    next
+                } else {
+                    if (start != null) {
+                        gaps.add(Break(next.to, start))
+                        break
+                    } else break
+                }
+            }
+        } else {
+            if (start != null) {
+                gaps.add(Break(first.to, start))
+            }
+        }
     }
-    breaks
+    gaps
 }

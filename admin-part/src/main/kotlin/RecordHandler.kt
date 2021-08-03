@@ -18,10 +18,14 @@ package com.epam.drill.plugins.tracer
 import com.epam.drill.plugins.tracer.api.*
 import com.epam.drill.plugins.tracer.storage.*
 import com.epam.drill.plugins.tracer.util.*
+import mu.*
 
+private val logger = KotlinLogging.logger()
 
 fun Plugin.initSendRecord(activeRecord: ActiveRecord) = activeRecord.initSendHandler { metrics ->
-    updateMetric(AgentsActiveStats(maxHeap = activeRecord.maxHeap, series = metrics.toSeries()))
+    val agentsStats = AgentsActiveStats(maxHeap = activeRecord.maxHeap, series = metrics.toSeries())
+    logger.trace { "Send $agentsStats" }
+    updateMetric(agentsStats)
 }
 
 fun Plugin.initPersistRecord(activeRecord: ActiveRecord) = activeRecord.initPersistHandler { metrics ->

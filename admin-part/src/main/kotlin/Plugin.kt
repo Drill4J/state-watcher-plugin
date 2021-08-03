@@ -23,7 +23,7 @@ import com.epam.drill.plugins.tracer.api.*
 import com.epam.drill.plugins.tracer.api.Memory
 import com.epam.drill.plugins.tracer.api.routes.*
 import com.epam.drill.plugins.tracer.common.api.*
-import com.epam.drill.plugins.tracer.common.api.Break
+import com.epam.drill.plugins.tracer.common.api.AgentBreak
 import com.epam.drill.plugins.tracer.common.api.StartRecordPayload
 import com.epam.drill.plugins.tracer.storage.*
 import com.epam.drill.plugins.tracer.util.*
@@ -96,6 +96,7 @@ class Plugin(
     //Actions from admin
     override suspend fun doAction(
         action: Action,
+        data: Any?,
     ): ActionResult = when (action) {
         is StartRecord -> action.payload.run {
             if (_activeRecord.value == null) {
@@ -105,11 +106,11 @@ class Plugin(
                         initPersistRecord(it)
                     }
                 }
-                logger.info { "Record has started " }
+                logger.info { "Record has started at ${record?.start}" }
                 val breaks = storeClient.loadRecordData(
                     AgentId(agentId, buildVersion)
                 )?.breaks?.getGap(record?.start)?.map {
-                    Break(it.from, it.to)
+                    AgentBreak(it.from, it.to)
                 } ?: emptyList()
                 StartAgentRecord(StartRecordPayload(
                     refreshRate = refreshRate,
@@ -118,15 +119,14 @@ class Plugin(
             } else ActionResult(StatusCodes.BAD_REQUEST, "Recode already started")
         }
         is StopRecord -> {
-            logger.info { "Record has stopped " }
-
             val activeRecord = _activeRecord.getAndUpdate { null }
             val recordData = activeRecord?.stopRecording()?.let { dao ->
+                logger.info { "Record has stopped at ${dao.stop}" }
                 storeClient.updateRecordData(AgentId(agentId, buildVersion), dao)
             }
             //TODO fix
             StopAgentRecord(StopRecordPayload(false,
-                recordData?.breaks?.getGap(activeRecord.start)?.map { Break(it.from, it.to) }
+                recordData?.breaks?.getGap(activeRecord.start)?.map { AgentBreak(it.from, it.to) }
                     ?: emptyList())).toActionResult()
         }
         is RecordData -> action.payload.run {
@@ -134,7 +134,7 @@ class Plugin(
                 AgentId(agentId, buildVersion),
                 instanceIds,
                 from..to,
-                )
+            )
             ActionResult(StatusCodes.OK,
                 stats.copy(
                     maxHeap = maxHeap.value,
@@ -160,7 +160,7 @@ class Plugin(
     internal suspend fun updateMetric(agentsStats: AgentsActiveStats) = send(
         buildVersion,
         Routes.Metrics.HeapState(Routes.Metrics()).let { Routes.Metrics.HeapState.UpdateHeap(it) },
-        agentsStats.also { println("Stats $it ") }
+        agentsStats
     )
 
     internal suspend fun send(buildVersion: String, destination: Any, message: Any) {
