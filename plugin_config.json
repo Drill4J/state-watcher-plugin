@@ -1,6 +1,6 @@
 {
-  "id": "state-watcher",
-  "name": "State-Watcher",
+  "id": "stateWatcher",
+  "name": "StateWatcher",
   "version": "{version}",
   "description": "",
   "type": "Custom",
