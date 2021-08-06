@@ -45,6 +45,7 @@ data class RecordDataSettings(val from: Long, val to: Long, val instanceIds: Set
 data class AgentsStats(
     val maxHeap: Long = 0,
     val isMonitoring: Boolean = false,
+    val hasRecord: Boolean = false,
     val breaks: List<Break> = emptyList(),
     val series: List<Series> = emptyList(),
 )

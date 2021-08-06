@@ -47,7 +47,7 @@ internal suspend fun StoreClient.loadRecordData(
     instances: Set<String> = emptySet(),
     range: LongRange = LongRange.EMPTY,
 ): AgentsStats = findById<StoredRecordData>(id)?.let { data ->
-    val breaks = data.breaks.mapNotNull { it.takeIf { it.to in range || range.isEmpty() } }
+    val breaks = data.breaks.mapNotNull { it.takeIf { it.from in range || it.to in range || range.isEmpty() } }
     val instancesToLoad = instances.takeIf { it.isNotEmpty() } ?: data.instances
     val series = instancesToLoad.mapNotNull { instanceId ->
         findById<InstanceData>(instanceId)?.let { instanceData ->
@@ -56,13 +56,14 @@ internal suspend fun StoreClient.loadRecordData(
             )
         }
     }.toSeries()
-    AgentsStats(breaks = breaks, series = series)
+    AgentsStats(breaks = breaks, series = series, hasRecord = series.any())
 } ?: AgentsStats()
 
 @Serializable
 internal data class StoredRecordData(
     @Id val id: AgentId,
     val maxHeap: Long,
+    val hasRecord: Boolean = true,
     val breaks: List<Break> = emptyList(),
     val instances: Set<String> = emptySet(),
 )
@@ -87,7 +88,8 @@ internal suspend fun StoreClient.updateRecordData(
             id = agentId,
             maxHeap = record.maxHeap,
             breaks = record.stop?.let { listOf(Break(record.start, it)) } ?: emptyList(),
-            instances = instances.map { it.instanceId }.toSet()
+            instances = instances.map { it.instanceId }.toSet(),
+            hasRecord = true
         )
     ).also { logger.trace { "New Recode saved $it" } }
 }

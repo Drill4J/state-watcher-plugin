@@ -61,9 +61,10 @@ class Plugin(
     private val maxHeap = atomic(0L)
 
 
+
     override suspend fun initialize() {
         storeClient.loadRecordData(AgentId(agentId, buildVersion))?.let { record ->
-            maxHeap.update { record.maxHeap }
+            maxHeap.value = record.maxHeap
         }
     }
 
@@ -152,8 +153,7 @@ class Plugin(
     override fun parseAction(
         rawAction: String,
     ): Action = Action.serializer() parse rawAction
-
-
+    
     override fun close() {
     }
 
