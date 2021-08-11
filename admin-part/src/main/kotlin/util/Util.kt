@@ -64,7 +64,10 @@ operator fun Set<InstanceData>.plus(
 }
 
 //TODO FIX (If some one see this i will be fired)
-fun Iterable<Break>.getGap(start: Long?) = run {
+fun Iterable<Break>.getGap(
+    start: Long? = null,
+    range: LongRange = LongRange.EMPTY,
+) = sortedBy { it.from }.run {
     val gaps = mutableListOf<Break>()
     val iterator = iterator()
     if (iterator.hasNext()) {
@@ -78,8 +81,8 @@ fun Iterable<Break>.getGap(start: Long?) = run {
                 } else {
                     if (start != null) {
                         gaps.add(Break(next.to, start))
-                        break
-                    } else break
+                    }
+                    break
                 }
             }
         } else {
@@ -89,4 +92,4 @@ fun Iterable<Break>.getGap(start: Long?) = run {
         }
     }
     gaps
-}
+}.filter { it.from in range || it.to in range || range.isEmpty() } // TODO filter it in loadRecordData

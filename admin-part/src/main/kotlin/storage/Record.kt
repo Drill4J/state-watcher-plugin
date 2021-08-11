@@ -24,10 +24,9 @@ import mu.*
 
 val logger = KotlinLogging.logger("Storage")
 
-internal suspend fun StoreClient.loadRecordData(id: AgentId) = findById<StoredRecordData>(id)
-
 class RecordDao(val maxHeap: Long, val start: Long, val stop: Long? = null, val metrics: Map<String, List<Metric>>)
 
+internal suspend fun StoreClient.loadRecordData(id: AgentId) = findById<StoredRecordData>(id)
 
 @Serializable
 data class AgentId(val agentId: String, val buildVersion: String)
@@ -42,23 +41,6 @@ data class InstanceData(
     override fun hashCode(): Int = instanceId.hashCode()
 }
 
-internal suspend fun StoreClient.loadRecordData(
-    id: AgentId,
-    instances: Set<String> = emptySet(),
-    range: LongRange = LongRange.EMPTY,
-): AgentsStats = findById<StoredRecordData>(id)?.let { data ->
-    val breaks = data.breaks.mapNotNull { it.takeIf { it.from in range || it.to in range || range.isEmpty() } }
-    val instancesToLoad = instances.takeIf { it.isNotEmpty() } ?: data.instances
-    val series = instancesToLoad.mapNotNull { instanceId ->
-        findById<InstanceData>(instanceId)?.let { instanceData ->
-            instanceData.copy(
-                metrics = instanceData.metrics.filter { it.timeStamp in range || range.isEmpty() }
-            )
-        }
-    }.toSeries()
-    AgentsStats(breaks = breaks, series = series, hasRecord = series.any())
-} ?: AgentsStats()
-
 @Serializable
 internal data class StoredRecordData(
     @Id val id: AgentId,
@@ -68,12 +50,28 @@ internal data class StoredRecordData(
     val instances: Set<String> = emptySet(),
 )
 
+internal suspend fun StoreClient.loadRecordData(
+    id: AgentId,
+    instances: Set<String> = emptySet(),
+    range: LongRange = LongRange.EMPTY,
+): AgentsStats = findById<StoredRecordData>(id)?.let { data ->
+    val instancesToLoad = instances.takeIf { it.isNotEmpty() } ?: data.instances
+    val series = instancesToLoad.mapNotNull { instanceId ->
+        findById<InstanceData>(instanceId)?.let { instanceData ->
+            instanceData.copy(
+                metrics = instanceData.metrics.filter { it.timeStamp in range || range.isEmpty() }
+            )
+        }
+    }.toSeries()
+    AgentsStats(breaks = data.breaks, series = series, hasRecord = series.any())
+} ?: AgentsStats()
+
 internal suspend fun StoreClient.updateRecordData(
     agentId: AgentId,
     record: RecordDao,
 ): StoredRecordData {
     val instances = mutableSetOf<InstanceData>()
-    for ((instanceId, metrics) in record.metrics) {
+    record.metrics.forEach { (instanceId, metrics) ->
         instances.add(findById<InstanceData>(instanceId)?.also {
             store(it.copy(metrics = it.metrics + metrics))
         } ?: store(InstanceData(instanceId, metrics)))

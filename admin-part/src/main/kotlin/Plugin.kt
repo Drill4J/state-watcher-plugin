@@ -61,7 +61,6 @@ class Plugin(
     private val maxHeap = atomic(0L)
 
 
-
     override suspend fun initialize() {
         storeClient.loadRecordData(AgentId(agentId, buildVersion))?.let { record ->
             maxHeap.value = record.maxHeap
@@ -110,8 +109,8 @@ class Plugin(
                 logger.info { "Record has started at ${record?.start}" }
                 val breaks = storeClient.loadRecordData(
                     AgentId(agentId, buildVersion)
-                )?.breaks?.getGap(record?.start)?.map {
-                    AgentBreak(it.from, it.to)
+                )?.breaks?.getGap(record?.start)?.lastOrNull()?.let {
+                    listOf(AgentBreak(it.from, it.to))
                 } ?: emptyList()
                 StartAgentRecord(StartRecordPayload(
                     refreshRate = refreshRate,
@@ -121,14 +120,11 @@ class Plugin(
         }
         is StopRecord -> {
             val activeRecord = _activeRecord.getAndUpdate { null }
-            val recordData = activeRecord?.stopRecording()?.let { dao ->
+            activeRecord?.stopRecording()?.let { dao ->
                 logger.info { "Record has stopped at ${dao.stop}" }
                 storeClient.updateRecordData(AgentId(agentId, buildVersion), dao)
             }
-            //TODO fix
-            StopAgentRecord(StopRecordPayload(false,
-                recordData?.breaks?.getGap(activeRecord.start)?.map { AgentBreak(it.from, it.to) }
-                    ?: emptyList())).toActionResult()
+            StopAgentRecord(StopRecordPayload(false)).toActionResult()
         }
         is RecordData -> action.payload.run {
             val stats = storeClient.loadRecordData(
@@ -140,7 +136,7 @@ class Plugin(
                 stats.copy(
                     maxHeap = maxHeap.value,
                     isMonitoring = _activeRecord.value != null,
-                    breaks = stats.breaks.getGap(_activeRecord.value?.start),
+                    breaks = stats.breaks.getGap(_activeRecord.value?.start,from..to),
                 ))
         }
         else -> {
@@ -153,7 +149,7 @@ class Plugin(
     override fun parseAction(
         rawAction: String,
     ): Action = Action.serializer() parse rawAction
-    
+
     override fun close() {
     }
 

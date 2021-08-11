@@ -27,7 +27,6 @@ data class StartRecordPayload(
 @Serializable
 data class StopRecordPayload(
     val isMonitoring: Boolean = false,
-    val breaks: List<AgentBreak>,
 )
 
 @Serializable
