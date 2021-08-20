@@ -39,31 +39,35 @@ class ActiveRecord(
 
     private val _persistHandler = atomic<PersistRecordHandler?>(null)
 
-    @Volatile
-    private var isJobsActive = true
-
     private val sendJob = AsyncJobDispatcher.launch {
-        while (isJobsActive) {
-            delay(5000L.takeIf { isJobsActive } ?: 0L)
-            val metrics = _metrics.getAndUpdate { it.clear() }
-            _sendHandler.value?.let { handler ->
-                handler(metrics)
-            }
-            _metricsToPersist.update { persistentMap ->
-                (persistentMap + metrics).asSequence().associate {
-                    it.key to it.value.toPersistentList()
-                }.toPersistentHashMap()
-            }
+        while (true) {
+            delay(5000L)
+            sendMetric()
         }
     }
 
-
     private val persistJob = AsyncJobDispatcher.launch {
-        while (isJobsActive) {
-            _persistHandler.value?.let { handler ->
-                delay(10000L.takeIf { isJobsActive } ?: 0L)
-                handler(_metricsToPersist.getAndUpdate { it.clear() })
-            }
+        while (true) {
+            delay(10000L)
+            persistMetric()
+        }
+    }
+
+    private suspend fun sendMetric() {
+        val metrics = _metrics.getAndUpdate { it.clear() }
+        _sendHandler.value?.let { handler ->
+            handler(metrics)
+        }
+        _metricsToPersist.update { persistentMap ->
+            (persistentMap + metrics).asSequence().associate {
+                it.key to it.value.toPersistentList()
+            }.toPersistentHashMap()
+        }
+    }
+
+    private suspend fun persistMetric() {
+        _persistHandler.value?.let { handler ->
+            handler(_metricsToPersist.getAndUpdate { it.clear() })
         }
     }
 
@@ -82,9 +86,10 @@ class ActiveRecord(
     }
 
     private suspend fun joinJobs() {
-        isJobsActive = false
-        sendJob.join()
-        persistJob.join()
+        sendJob.cancel()
+        persistJob.cancel()
+        sendMetric()
+        persistMetric()
     }
 
     fun initSendHandler(handler: ActiveRecordHandler) = _sendHandler.update {
